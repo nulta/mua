@@ -1,91 +1,9 @@
 -- Lua Lexer written in Lua
 
----@enum TokenType
-local TokenType = {
-    KEYWORD = "KEYWORD",
-    NAME = "NAME",
-    SYMBOL = "SYMBOL",
-    NUMBER_LITERAL = "NUMBER_LITERAL",
-    STRING_LITERAL = "STRING_LITERAL",
-    EOF = "EOF",
-}
-
-
--- Vanilla Lua keywords (always keywords)
-local LuaKeywords = {
-    ["and"] = true,
-    ["break"] = true,
-    ["do"] = true,
-    ["else"] = true,
-    ["elseif"] = true,
-    ["end"] = true,
-    ["false"] = true,
-    ["for"] = true,
-    ["function"] = true,
-    ["goto"] = true,
-    ["if"] = true,
-    ["in"] = true,
-    ["local"] = true,
-    ["nil"] = true,
-    ["not"] = true,
-    ["or"] = true,
-    ["repeat"] = true,
-    ["return"] = true,
-    ["then"] = true,
-    ["true"] = true,
-    ["until"] = true,
-    ["while"] = true,
-}
-
-
--- Lua and mua symbols
-local Symbols = {
-    ["..."] = true,
-    [".."] = true,
-    ["=="] = true,
-    ["~="] = true,
-    ["<="] = true,
-    [">="] = true,
-    ["<<"] = true,
-    [">>"] = true,
-    ["//"] = true,
-    ["::"] = true,
-    ["+"] = true,
-    ["-"] = true,
-    ["*"] = true,
-    ["/"] = true,
-    ["^"] = true,
-    ["%"] = true,
-    ["<"] = true,
-    [">"] = true,
-    ["="] = true,
-    ["~"] = true,
-    ["#"] = true,
-    [","] = true,
-    [":"] = true,
-    [";"] = true,
-    ["{"] = true,
-    ["}"] = true,
-    ["["] = true,
-    ["]"] = true,
-    ["("] = true,
-    [")"] = true,
-    ["."] = true,
-
-    -- Mua
-    -- ["??"] = true,
-    -- ["?."] = true,
-    -- ["?["] = true,
-    -- ["?:"] = true,
-    -- ["@"] = true,
-    -- ["`"] = true,
-    -- ["|"] = true,
-    -- ["!"] = true,
-}
-
+local Defs = require("compiler/definitions")
 
 local SymbolFirstChars = {}
-for symbol in pairs(Symbols) do
+for symbol in pairs(Defs.Symbols) do
     SymbolFirstChars[symbol:sub(1, 1)] = true
 end
 
@@ -251,12 +169,12 @@ function Lexer:lex()
         end
     end
 
-    self:insertBlankToken(TokenType.EOF)
+    self:insertBlankToken(Defs.TokenType.EOF)
 end
 
 
 function Lexer:lexNumber()
-    self:startToken(TokenType.NUMBER_LITERAL)
+    self:startToken(Defs.TokenType.NUMBER_LITERAL)
 
     local dot = false
     local exponent = false
@@ -303,7 +221,7 @@ end
 
 
 function Lexer:lexText()
-    self:startToken(TokenType.NAME)
+    self:startToken(Defs.TokenType.NAME)
 
     repeat
         local char = self:peek()
@@ -316,8 +234,8 @@ function Lexer:lexText()
     until self:isEof()
 
     local value = self:getTokenValue()
-    if LuaKeywords[value] then
-        self:switchToken(TokenType.KEYWORD)
+    if Defs.LuaKeywords[value] then
+        self:switchToken(Defs.TokenType.KEYWORD)
     end
 
     self:endToken()
@@ -325,17 +243,17 @@ end
 
 
 function Lexer:lexSymbol()
-    self:startToken(TokenType.SYMBOL)
+    self:startToken(Defs.TokenType.SYMBOL)
 
     local peek3 = self:peek(3)
     local peek2 = self:peek(2)
     local peek1 = self:peek(1)
 
-    if Symbols[peek3] then
+    if Defs.Symbols[peek3] then
         self:pop(3)
-    elseif Symbols[peek2] then
+    elseif Defs.Symbols[peek2] then
         self:pop(2)
-    elseif Symbols[peek1] then
+    elseif Defs.Symbols[peek1] then
         self:pop(1)
     else
         self:error("internal error: unknown symbol")
@@ -346,7 +264,7 @@ end
 
 
 function Lexer:lexString()
-    self:startToken(TokenType.STRING_LITERAL)
+    self:startToken(Defs.TokenType.STRING_LITERAL)
 
     local delimiter = self:pop()
     local isLongString = delimiter == "["
