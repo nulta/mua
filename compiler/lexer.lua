@@ -1,6 +1,6 @@
 -- Lua Lexer written in Lua
 
-local Defs = require("compiler/definitions")
+local Defs = require("compiler.definitions")
 
 local SymbolFirstChars = {}
 for symbol in pairs(Defs.Symbols) do
@@ -25,11 +25,13 @@ end
 ---@field bytes number
 ---@field tokens TokenSequence
 ---@field currentToken Token?
+---@field filename string
 local Lexer = {}
 
 
 ---@param source string
-function Lexer.new(source)
+---@param filename string?
+function Lexer.new(source, filename)
     local self = setmetatable({}, { __index = Lexer })
     self.source = source
     self.line = 1
@@ -37,6 +39,7 @@ function Lexer.new(source)
     self.bytes = 0
     self.tokens = {}
     self.currentToken = nil
+    self.filename = filename or "[?]"
     return self
 end
 

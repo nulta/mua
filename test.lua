@@ -38,3 +38,36 @@ hi!]=];
 
     testLexer("nil")
 end
+
+local Parser = require("compiler.parser")
+print("")
+print("=== Test: compiler.parser ===")
+print("")
+do
+    local function testParser(code)
+        print("")
+        local tokens = Lexer.new(code):lex()
+        local ast = Parser.new(tokens):parse()
+        if p then
+            for k,v in ipairs(ast) do p(k) p(v) end
+        else
+            for k,v in ipairs(ast) do print(k, v) end
+        end
+    end
+
+    local function exceptError(code)
+        print("")
+        local tokens = Lexer.new(code):lex()
+        local ok, err = pcall(function() Parser.new(tokens):parse() end)
+        if not ok then
+            print("Caught excepted error", err)
+        else
+            error("Excepted error, but the code was executed with no error")
+        end
+    end
+
+    testParser("do do end end")
+    exceptError("do do end end end")
+    exceptError("do do do end")
+
+end
