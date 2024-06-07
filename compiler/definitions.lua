@@ -94,4 +94,28 @@ for k,_ in pairs(Defs.MuaSymbols) do
     Defs.Symbols[k] = true
 end
 
+function Defs.getPrecedence(symbol)
+    if symbol == "^" then
+        return 12
+    elseif symbol == "*" or symbol == "/" or symbol == "//" or symbol == "%" then
+        return 11
+    elseif symbol == "+" or symbol == "-" then
+        return 10
+    elseif symbol == ".." then
+        return 9
+    elseif symbol == "<<" or symbol == ">>" then
+        return 8
+    elseif symbol == "<" or symbol == ">" or symbol == "<=" or symbol == ">=" then
+        return 7
+    elseif symbol == "==" or symbol == "~=" then
+        return 6
+    elseif symbol == "and" then
+        return 3
+    elseif symbol == "or" then
+        return 2
+    else
+        return -1
+    end
+end
+
 return Defs

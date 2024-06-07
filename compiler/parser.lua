@@ -258,4 +258,163 @@ do -- Parsing --
     end
 end
 
+do -- Utilities --
+
+    ---@param value string
+    ---@return number
+    function Parser:literalToNumber(value)
+        -- 0x????, 0b????, 0o????
+        if value:sub(1, 2) == "0x" then
+            return tonumber(value:sub(3), 16)
+        elseif value:sub(1, 2) == "0b" then
+            return tonumber(value:sub(3), 2)
+        elseif value:sub(1, 2) == "0o" then
+            return tonumber(value:sub(3), 8)
+        end
+
+        -- otherwise, decimal
+        local number = tonumber(value)
+        self:assertf(number, "Invalid number literal")
+
+        ---@type number
+        return number
+    end
+
+    ---@param value string
+    ---@return string
+    function Parser:literalToString(value)
+        local firstChar = value:sub(1, 1)
+        
+        -- case 1: "" or ''
+        if firstChar == "\"" or firstChar == "'" then
+            return value:sub(2, -2)
+        end
+
+        -- case 2: [[...]] or [=[...]=]
+        if firstChar == "[" then
+            local opener = value:match("^%[=*%[")
+            local closer = opener:gsub("%[", "]")
+            local content =  value:gsub("^" .. opener, ""):gsub(closer .. "$", "")
+            return content
+        end
+
+        ---@diagnostic disable-next-line: return-type-mismatch
+        return self:error("Invalid string literal")
+    end
+end
+
+do -- Expression Parsing --
+    ---@return ExpressionNode
+    function Parser:parseExpression()
+        return self:parseBinaryExpression(0)
+    end
+
+    ---@param minPrecedence number
+    ---@return ExpressionNode
+    function Parser:parseBinaryExpression(minPrecedence)
+        local left = self:parseUnaryExpression()
+        local token = self:currentToken()
+
+        while token.type == TokenType.SYMBOL do
+            local position = self:getPosition()
+
+            local precedence = Defs.getPrecedence(token.value)
+            if precedence < minPrecedence then
+                break
+            end
+
+            self:advanceToken()
+            local right = self:parseBinaryExpression(precedence + 1)
+            left = Ast.BinaryExpressionNode:new({left = left, right = right, operator = token.value}, position)
+            token = self:currentToken()
+        end
+
+        return left
+    end
+
+    ---@return ExpressionNode
+    function Parser:parseUnaryExpression()
+        local token = self:currentToken()
+        if token.type == TokenType.SYMBOL then
+            if token.value == "-" or token.value == "not" then
+                local position = self:getPosition()
+
+                self:advanceToken()
+                local expression = self:parseUnaryExpression()
+                return Ast.UnaryExpressionNode:new({expression = expression, operator = token.value}, position)
+            end
+        end
+
+        return self:parsePrimaryExpression()
+    end
+
+    ---@return ExpressionNode
+    function Parser:parsePrimaryExpression()
+        local position = self:getPosition()
+        local token = self:currentToken()
+
+        if token.type == TokenType.NUMBER then
+            local number = self:literalToNumber(token.value)
+            self:advanceToken()
+            return Ast.NumberLiteralNode:new({value = number}, position)
+        end
+
+        if token.type == TokenType.STRING then
+            local string = self:literalToString(token.value)
+            self:advanceToken()
+            return Ast.StringLiteralNode:new({value = string}, position)
+        end
+
+        if token.type == TokenType.KEYWORD then
+            if token.value == "nil" then
+                self:advanceToken()
+                return Ast.NilLiteralNode:new({value = nil}, position)
+            end
+
+            if token.value == "true" or token.value == "false" then
+                self:advanceToken()
+                return Ast.BooleanLiteralNode:new({value = (token.value == "true")}, position)
+            end
+        end
+
+        if token.type == TokenType.NAME then
+            local name = token.value
+            self:advanceToken()
+
+            if self:currentTokenIs("(") then
+                return self:parseFunctionCallExpression(name)
+            end
+
+            return Ast.VariableNode:new({name = name}, position)
+        end
+
+        self:error("Unexpected token")
+    end
+
+    ---@param name string
+    ---@return FunctionCallExpressionNode
+    function Parser:parseFunctionCallExpression(name)
+        local position = self:getPosition()
+
+        self:skipExceptedToken("(")
+        local arguments = self:parseExpressionList(")")
+
+        return Ast.FunctionCallExpressionNode:new({name = name, arguments = arguments}, position)
+    end
+
+    ---@param endToken TokenType | string
+    ---@return ExpressionNode[]
+    function Parser:parseExpressionList(endToken)
+        local expressions = {}
+
+        while self:currentTokenIs(",") and not self:currentTokenIs(endToken) do
+            local expression = self:parseExpression()
+            table.insert(expressions, expression)
+        end
+
+        self:skipExceptedToken(endToken)
+        return expressions
+    end
+end
+
 return Parser

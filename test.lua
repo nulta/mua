@@ -48,8 +48,9 @@ do
         print("")
         local tokens = Lexer.new(code):lex()
         local ast = Parser.new(tokens):parse()
-        if p then
-            for k,v in ipairs(ast) do p(k) p(v) end
+        if _G["p"] then
+            -- Luvit extension
+            for k,v in ipairs(ast) do _G["p"](k) _G["p"](v) end
         else
             for k,v in ipairs(ast) do print(k, v) end
         end
