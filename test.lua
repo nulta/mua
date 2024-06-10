@@ -37,6 +37,21 @@ hi!]=];
     ]====]
 
     testLexer("nil")
+
+    testLexer("true -- this is a comment 123456")
+
+    testLexer("3 3.0 3.1416 314.16e-2 0.31416E1 0xff 0x0.1E 0xA23p-4 0X1.921FB54442D18P+1")
+    testLexer("3_000_000 10_00_____00 10234E5_ 0x_4_404305")
+
+    testLexer([===[
+        -- this is a singleline comment
+        123
+        --[[this is a
+        multiline
+        comment]]--
+        456
+    ]===])
+
 end
 
 
@@ -52,6 +67,9 @@ do
         print("")
         print("")
         print("[ Test #" .. counts .. " ]")
+        if not code:find("\n") then
+            print("  " .. code)
+        end
 
         local tokens = Lexer.new(code):lex()
 
@@ -100,7 +118,7 @@ do
             end
         end
 
-        printAst(ast)
+        printAst(ast, "AST")
     end
 
     local function exceptError(code)
@@ -108,6 +126,9 @@ do
         print("")
         print("")
         print("[ Test #" .. counts .. " ]")
+        if not code:find("\n") then
+            print("> " .. code)
+        end
 
         local tokens = Lexer.new(code):lex()
         local ok, err = pcall(function() Parser.new(tokens):parse() end)

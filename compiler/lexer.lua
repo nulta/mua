@@ -1,6 +1,7 @@
 -- Lua Lexer written in Lua
 
 local Defs = require("compiler.definitions")
+local TokenType = Defs.TokenType
 
 local SymbolFirstChars = {}
 for symbol in pairs(Defs.Symbols) do
@@ -165,6 +166,9 @@ function Lexer:lex()
         elseif char == "[" and (self:peek(2) == "[[" or self:peek(2) == "[=") then
             self:lexString()
 
+        elseif char == "-" and self:peek(2) == "--" then
+            self:processComment()
+
         elseif SymbolFirstChars[char] then
             self:lexSymbol()
 
@@ -173,42 +177,54 @@ function Lexer:lex()
         end
     end
 
-    self:insertBlankToken(Defs.TokenType.EOF)
+    self:insertBlankToken(TokenType.EOF)
 
     return self.tokens
 end
 
 
 function Lexer:lexNumber()
-    self:startToken(Defs.TokenType.NUMBER_LITERAL)
+    self:startToken(TokenType.NUMBER_LITERAL)
 
     local dot = false
     local exponent = false
 
+    local isFirstChar = true
+    local digits = "[0-9_]"
+    local exponentSign = "[eE]"
+
     repeat
-        ::continue::
-
-        local char = self:peek()
-        local isFirstChar = self.bytes + 1 == self.currentToken.bytes
-
         -- 0x, 0b, 0o
         if isFirstChar then
-            ---@diagnostic disable-next-line: redefined-local
-            local char = self:peek(2)
-            if char:match("0[xXbBoO]") then
+            local prefix = self:peek(2):lower()
+
+            if prefix == "0x" then
+                digits = "[0-9a-fA-F_]"
+                exponentSign = "[pP]"
                 self:pop(2)
-                goto continue
+
+            elseif prefix == "0b" then
+                digits = "[01_]"
+                self:pop(2)
+
+            elseif prefix == "0o" then
+                digits = "[0-7_]"
+                self:pop(2)
             end
+
+            isFirstChar = false
         end
 
+        local char = self:peek()
+
         -- 123, 3.14, .5, 100_00_000, ...
-        if char:match("%d") or char == "_" then
+        if char:match(digits) then
             -- do nothing
         elseif char == "." then
-            self:assertf(not dot, "malformed number literal near %s", char)
+            self:assertf(not dot, "malformed number near %s", char)
             dot = true
-        elseif char:match("[eE]") then
-            self:assertf(not exponent, "malformed number literal near %s", char)
+        elseif char:match(exponentSign) then
+            self:assertf(not exponent, "malformed number near %s", char)
             exponent = true
 
             local nextChar = self:peek(2, 1)
@@ -227,7 +243,7 @@ end
 
 
 function Lexer:lexText()
-    self:startToken(Defs.TokenType.NAME)
+    self:startToken(TokenType.NAME)
 
     repeat
         local char = self:peek()
@@ -241,7 +257,7 @@ function Lexer:lexText()
 
     local value = self:getTokenValue()
     if Defs.LuaKeywords[value] then
-        self:switchToken(Defs.TokenType.KEYWORD)
+        self:switchToken(TokenType.KEYWORD)
     end
 
     self:endToken()
@@ -249,7 +265,7 @@ end
 
 
 function Lexer:lexSymbol()
-    self:startToken(Defs.TokenType.SYMBOL)
+    self:startToken(TokenType.SYMBOL)
 
     local peek3 = self:peek(3)
     local peek2 = self:peek(2)
@@ -270,7 +286,7 @@ end
 
 
 function Lexer:lexString()
-    self:startToken(Defs.TokenType.STRING_LITERAL)
+    self:startToken(TokenType.STRING_LITERAL)
 
     local delimiter = self:pop()
     local isLongString = delimiter == "["
@@ -316,5 +332,17 @@ function Lexer:lexString()
     self:endToken()
 end
 
+
+function Lexer:processComment()
+    self:pop(2)
+    if self:peek() == "[" then
+        self:lexString()
+        self.tokens[#self.tokens] = nil
+    else
+        while self:peek() ~= "\n" and not self:isEof() do
+            self:pop()
+        end
+    end
+end
 
 return Lexer
