@@ -1,3 +1,4 @@
+---@class Ast
 local Ast = {}
 
 ---@alias NODETYPE
@@ -35,6 +36,7 @@ local Ast = {}
 ---| "OpExpressionNode"
 ---| "BinaryOpExpressionNode"
 ---| "UnaryOpExpressionNode"
+---| "NameExpressionNode"
 
 do
     ---@class Node
@@ -168,9 +170,9 @@ Ast.LocalFunctionDeclarationStatementNode = Ast.FunctionDeclarationStatementNode
 ---@field expressions ExpressionNode[]
 Ast.VariableAssignmentStatementNode = Ast.StatementNode:extend("VariableAssignmentStatementNode")
 
----@class LocalVariableDeclarationStatementNode : StatementNode
+---@class LocalVariableDeclarationStatementNode : VariableAssignmentStatementNode
 ---@field type "LocalVariableAssignmentStatementNode"
-Ast.LocalVariableAssignmentStatementNode = Ast.StatementNode:extend("LocalVariableAssignmentStatementNode")
+Ast.LocalVariableAssignmentStatementNode = Ast.VariableAssignmentStatementNode:extend("LocalVariableAssignmentStatementNode")
 
 ---@class ReturnStatementNode : StatementNode
 ---@field type "ReturnStatementNode"
@@ -183,7 +185,7 @@ Ast.BreakStatementNode = Ast.StatementNode:extend("BreakStatementNode")
 
 ---@class FunctionCallStatementNode : StatementNode
 ---@field type "FunctionCallStatementNode"
----@field expression ExpressionNode
+---@field expression FunctionCallExpressionNode
 Ast.FunctionCallStatementNode = Ast.StatementNode:extend("FunctionCallStatementNode")
 
 ---@class GotoLabelStatementNode : StatementNode
@@ -229,7 +231,8 @@ Ast.BooleanLiteralExpressionNode = Ast.LiteralExpressionNode:extend("BooleanLite
 Ast.TableLiteralExpressionNode = Ast.LiteralExpressionNode:extend("TableLiteralExpressionNode")
 
 ---@class FunctionCallExpressionNode : ExpressionNode
----@field name ExpressionNode
+---@field target ExpressionNode
+---@field method string?
 ---@field args ExpressionNode[]
 Ast.FunctionCallExpressionNode = Ast.ExpressionNode:extend("FunctionCallExpressionNode")
 
@@ -244,5 +247,8 @@ Ast.BinaryOpExpressionNode = Ast.ExpressionNode:extend("BinaryOpExpressionNode")
 ---@field expression ExpressionNode
 Ast.UnaryOpExpressionNode = Ast.ExpressionNode:extend("UnaryOpExpressionNode")
 
+---@class NameExpressionNode : ExpressionNode
+---@field name string | "..."
+Ast.NameExpressionNode = Ast.ExpressionNode:extend("NameExpressionNode")
 
 return Ast

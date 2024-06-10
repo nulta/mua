@@ -3,6 +3,7 @@ local Defs = {}
 
 --- Token types, outputted by the lexer
 ---@enum TokenType
+---@class _TokenType
 Defs.TokenType = {
     KEYWORD = "KEYWORD",
     NAME = "NAME",
@@ -94,27 +95,30 @@ for k,_ in pairs(Defs.MuaSymbols) do
     Defs.Symbols[k] = true
 end
 
+--- Returns the left-binding power and right-binding power of a operator.
+---@param symbol string
+---@return integer, integer
 function Defs.getPrecedence(symbol)
     if symbol == "^" then
-        return 12
+        return 121, 120
     elseif symbol == "*" or symbol == "/" or symbol == "//" or symbol == "%" then
-        return 11
+        return 110, 111
     elseif symbol == "+" or symbol == "-" then
-        return 10
+        return 100, 101
     elseif symbol == ".." then
-        return 9
+        return 91, 90
     elseif symbol == "<<" or symbol == ">>" then
-        return 8
+        return 80, 81
     elseif symbol == "<" or symbol == ">" or symbol == "<=" or symbol == ">=" then
-        return 7
+        return 70, 71
     elseif symbol == "==" or symbol == "~=" then
-        return 6
+        return 60, 61
     elseif symbol == "and" then
-        return 3
+        return 30, 31
     elseif symbol == "or" then
-        return 2
+        return 20, 21
     else
-        return -1
+        return 0, 0
     end
 end
 
