@@ -120,9 +120,8 @@ function Lexer:endToken()
 end
 
 
----@param type TokenType
-function Lexer:insertBlankToken(type)
-    self:startToken(type)
+function Lexer:insertEof()
+    self:startToken(TokenType.EOF)
     self:endToken()
 end
 
@@ -177,7 +176,7 @@ function Lexer:lex()
         end
     end
 
-    self:insertBlankToken(TokenType.EOF)
+    self:insertEof()
 
     return self.tokens
 end

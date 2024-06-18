@@ -21,133 +21,101 @@ function Parser.new(tokens, filename)
     return self
 end
 
-do -- Error handling --
-    --- Throws a parser error
-    ---@param message string
-    function Parser:error(message)
-        local token = self:currentToken()
-        error(("%d:%d: Parser Error: %s"):format(token.line, token.column, message))
+
+-- Helper functions --
+do
+    ---@return Token
+    function Parser:current()
+        return self.tokens[self.tokenIndex]
     end
 
-    --- Asserts that a condition is true, otherwise throws an error
+
+    ---@return { line: number, column: number }
+    function Parser:peekPosition()
+        local token = self:peek()
+        return {line = token.line, column = token.column}
+    end
+
+
+    ---@param index integer?
+    ---@return Token
+    function Parser:peek(index)
+        index = index or 1
+        return self.tokens[self.tokenIndex]
+    end
+
+
+    ---@return Token
+    function Parser:next()
+        local token = self.tokens[self.tokenIndex]
+        self.tokenIndex = self.tokenIndex + 1
+        return token
+    end
+
+
+    ---@param message string
+    function Parser:error(message)
+        local token = self:current()
+        local filename = self.tree.filename
+        local ln = token.line
+        local col = token.column
+
+        error(("%s:%d:%d: %s"):format(filename, ln, col, message))
+    end
+
+
     ---@generic T
     ---@param condition T | nil
     ---@param message string
-    ---@param ... any
     ---@return T
-    function Parser:assertf(condition, message, ...)
+    function Parser:assert(condition, message)
         if not condition then
-            self:error(message:format(...))
+            self:error(message)
         end
 
         return condition
     end
 
-    --- Asserts that the current token is of a certain types
-    ---@param token Token
-    ---@param type TokenType
-    ---@param value string
-    ---@overload fun(self: self, token: Token, typeOrValue: TokenType | string)
-    ---@overload fun(self: self, type: TokenType, value: string)
-    ---@overload fun(self: self, typeOrValue: TokenType | string)
-    function Parser:exceptToken(token, type, value)
-        if _G.type(token) == "string" and not value then
-            ---@diagnostic disable-next-line: cast-local-type
-            token, type, value = self:currentToken(), token, type
-        end
 
-        if type and not value and not TokenType[type] then
-            ---@diagnostic disable-next-line: cast-local-type
-            value, type = type, nil
-        end
-
-        if type and token.type ~= type then
-            self:error(("Expected %s, got %s"):format(type, token.type))
-        end
-
-        if value and token.value ~= value then
-            self:error(("Expected %s, got %s"):format(value, token.value))
-        end
-    end
-end
-
-do -- Token sequence controller --
-    --- Get the current token
-    ---@return Token
-    function Parser:currentToken()
-        return self.tokens[self.tokenIndex]
-    end
-
-    --- Get the current token and assert that it is of a certain type
     ---@param type TokenType | string
-    ---@return Token
-    function Parser:exceptedCurrentToken(type)
-        self:exceptToken(type)
-        return self:currentToken()
-    end
+    ---@return Token?
+    function Parser:match(type)
+        local token = self:peek()
+        local isSpecialToken = token.type == TokenType.KEYWORD or token.type == TokenType.SYMBOL
 
-    --- Move to the next token and return it
-    ---@return Token
-    function Parser:advanceToken()
-        self.tokenIndex = self.tokenIndex + 1
-        return self.tokens[self.tokenIndex]
-    end
-
-    --- Peek the next token
-    ---@param offset number?
-    ---@return Token
-    function Parser:nextToken(offset)
-        offset = offset or 1
-        return self.tokens[self.tokenIndex + offset]
-    end
-
-    --- Peek the previous token
-    ---@return Token
-    function Parser:previousToken()
-        return self:nextToken(-1)
-    end
-
-    --- Check if the current token is the end of the file
-    ---@return boolean
-    function Parser:isEof()
-        return self:currentToken().type == TokenType.EOF
-    end
-
-    --- Except the current token and move to the next one
-    ---@param tokenTypeOrValue TokenType | string
-    function Parser:skipExceptedToken(tokenTypeOrValue)
-        self:exceptToken(tokenTypeOrValue)
-        self:advanceToken()
-    end
-
-    --- Check if the current token is of a certain type.
-    --- If the token is a KEYWORD or SYMBOL, it will also check the value
-    ---@param tokenTypeOrValue TokenType | string
-    function Parser:currentTokenIs(tokenTypeOrValue)
-        local token = self:currentToken()
-        if token.type == tokenTypeOrValue then
-            return true
-        elseif token.type == TokenType.KEYWORD or token.type == TokenType.SYMBOL then
-            return token.value == tokenTypeOrValue
-        else
-            return false
+        if (token.type == type) or (isSpecialToken and token.value == type) then
+            return self:next()
         end
+
+        return nil
     end
 
-    function Parser:getPosition()
-        local token = self:currentToken()
-        return {line = token.line, column = token.column}
+
+    ---@param ... TokenType | string
+    ---@return Token
+    function Parser:expect(...)
+        for _, type in ipairs({...}) do
+            local match = self:match(type)
+            if match then
+                return match
+            end
+        end
+
+        ---@diagnostic disable: missing-return
+        self:error(("unexcepted symbol near '%s'"):format(type, self:current().value))
     end
 end
 
-do -- Node controller --
-end
 
-do -- Parsing --
+-- Parsing functions --
+do
+    --- Parse given tokens, then returns the AST.
     ---@return AbstractSyntaxTree
     function Parser:parse()
-        local nodes = self:parseStatementBlock(TokenType.EOF)
-        for _, node in ipairs(nodes) do
+        local block = self:parseBlock()
+        self:expect(TokenType.EOF)
+
+        for _, node in ipairs(block) do
             table.insert(self.tree, node)
         end
 
@@ -155,362 +123,363 @@ do -- Parsing --
     end
 
 
-    ---@param ... TokenType | string  End conditions
-    ---@return StatementNode[]
-    function Parser:parseStatementBlock(...)
-        local nodes = {}
-        local endConditions = {...}
+    --- `block ::= {stat} [retstat]`
+    ---@return StatNode[]
+    function Parser:parseBlock()
+        local block = {}
 
-        local function endCondition()
-            for _, condition in ipairs(endConditions) do
-                if self:currentTokenIs(condition) then
-                    return true
-                end
-            end
-            return false
-        end
+        -- {stat}
+        local stat repeat
+            stat = self:tryStat()
+            table.insert(block, stat)
+        until not stat
 
-        while not endCondition() do
-            local statement = self:parseStatement()
-            table.insert(nodes, statement)
-        end
-        self:advanceToken()
+        -- [retstat]
+        local retstat = self:tryReturnStat()
+        table.insert(block, retstat)
 
-        return nodes
+        return block
     end
 
 
-    ---@return StatementNode
-    function Parser:parseStatement()
-        local token = self:currentToken()
-        local value = token.value
+    --- `stat ::= (...)`
+    ---@return StatNode?
+    function Parser:tryStat()
+        local position = self:peekPosition()
 
-        if token.type == TokenType.KEYWORD then
-            local switches = {
-                ["do"] = self.parseDoStmt,
-                ["if"] = self.parseIfStmt,
-                ["while"] = self.parseWhileStmt,
-                ["repeat"] = self.parseRepeatStmt,
-                ["for"] = self.parseForStmt,
-                ["return"] = self.parseReturnStmt,
-                ["break"] = self.parseBreakStmt,
-                ["goto"] = self.parseGotoStmt,
-                ["function"] = self.parseFunctionDeclearationStmt,
-                ["local"] = function(_)
-                    if self:nextToken().value == "function" then
-                        return self:parseFunctionDeclearationStmt(true)
-                    else
-                        return self:parseAssignmentStmt(true)
-                    end
-                end,
-            }
+        -- varlist '=' explist | functioncall
+        --!!! TODO
 
-            local parserFunction = self:assertf(switches[value], "Unexpected keyword '%s'", value)
-            return parserFunction(self)
-        else
-            local nextTokenVal = self:nextToken().value
-            local isAssignment = nextTokenVal == "=" or nextTokenVal == ","
-
-            if isAssignment then
-                return self:parseAssignmentStmt()
-            else
-                local functionCall = self:parseFunctionCallExpression()
-                return Ast.FunctionCallStatementNode:new(
-                    {expression = functionCall},
-                    functionCall.position
-                )
-            end
+        -- label
+        if self:match("::") then
+            local label = self:expect(TokenType.NAME).value
+            self:expect("::")
+            return Ast.GotoLabelStatNode:new({name = label}, position)
         end
-    end
 
+        -- break
+        if self:match("break") then
+            return Ast.BreakStatNode:new({}, position)
+        end
 
-    ---@return DoStatementNode
-    function Parser:parseDoStmt()
-        local position = self:getPosition()
+        -- goto Name
+        if self:match("goto") then
+            local name = self:expect(TokenType.NAME).value
+            return Ast.GotoStatNode:new({name = name}, position)
+        end
 
-        self:skipExceptedToken("do")
-        local block = self:parseStatementBlock("end")
+        -- do block end
+        if self:match("do") then
+            local block = self:parseBlock()
+            self:expect("end")
 
-        return Ast.DoStatementNode:new({block = block}, position)
-    end
+            return Ast.DoStatNode:new({block = block}, position)
+        end
 
-
-    ---@return IfStatementNode
-    function Parser:parseIfStmt()
-        local position = self:getPosition()
-
-        ---@type _AtomicIf[]
-        local ifNodes = {}
-
-        self:skipExceptedToken("if")
-        repeat
+        -- while exp do block end
+        if self:match("while") then
             local condition = self:parseExpression()
-            self:skipExceptedToken("then")
+            self:expect("do")
+            local block = self:parseBlock()
+            self:expect("end")
 
-            local block = self:parseStatementBlock("elseif", "else", "end")
-            table.insert(ifNodes, {condition = condition, block = block})
-        until self:previousToken().value ~= "elseif"
-
-        local elseBlock = nil
-        if self:previousToken().value == "else" then
-            elseBlock = self:parseStatementBlock("end")
+            return Ast.WhileStatNode:new({condition = condition, block = block}, position)
         end
 
-        return Ast.IfStatementNode:new(
-            {ifNodes = ifNodes, elseBlock = elseBlock},
-            position
-        )
-    end
+        -- repeat block until exp
+        if self:match("repeat") then
+            local block = self:parseBlock()
+            self:expect("until")
+            local condition = self:parseExpression()
 
-
-    ---@return WhileStatementNode
-    function Parser:parseWhileStmt()
-        local position = self:getPosition()
-
-        self:skipExceptedToken("while")
-        local condition = self:parseExpression()
-        self:skipExceptedToken("do")
-        local block = self:parseStatementBlock("end")
-
-        return Ast.WhileStatementNode:new(
-            {condition = condition, block = block},
-            position
-        )
-    end
-
-
-    ---@return VariableAssignmentStatementNode
-    function Parser:parseAssignmentStmt(isLocal)
-        local position = self:getPosition()
-
-        local names = self:parseExpressionList("=")
-        local values = self:parseExpressionList()
-
-        if isLocal then
-            return Ast.LocalVariableAssignmentStatementNode:new(
-                {names = names, values = values},
-                position
-            )
-        else
-            return Ast.VariableAssignmentStatementNode:new(
-                {names = names, values = values},
-                position
-            )
-        end
-    end
-end
-
-do -- Utilities --
-
-    ---@param value string
-    ---@return number
-    function Parser:literalToNumber(value)
-        -- 0x????, 0b????, 0o????
-        if value:sub(1, 2) == "0x" then
-            return tonumber(value:sub(3), 16)
-        elseif value:sub(1, 2) == "0b" then
-            return tonumber(value:sub(3), 2)
-        elseif value:sub(1, 2) == "0o" then
-            return tonumber(value:sub(3), 8)
+            return Ast.RepeatStatNode:new({block = block, untilCondition = condition}, position)
         end
 
-        -- otherwise, decimal
-        local number = tonumber(value)
-        self:assertf(number, "Invalid number literal")
+        -- if exp then block {elseif exp then block} [else block] end
+        if self:match("if") then
+            local ifNodes = {}
+            local elseBlock = nil
 
-        ---@type number
-        return number
-    end
+            repeat
+                local condition = self:parseExpression()
+                self:expect("then")
+                local block = self:parseBlock()
 
-    ---@param value string
-    ---@return string
-    function Parser:literalToString(value)
-        local firstChar = value:sub(1, 1)
-        
-        -- case 1: "" or ''
-        if firstChar == "\"" or firstChar == "'" then
-            return value:sub(2, -2)
-        end
+                table.insert(ifNodes, {condition = condition, block = block})
+            until not self:match("elseif")
 
-        -- case 2: [[...]] or [=[...]=]
-        if firstChar == "[" then
-            local opener = value:match("^%[=*%[")
-            local content =  value:sub(#opener + 1, -#opener - 1)
-            return content
-        end
-
-        ---@diagnostic disable-next-line: return-type-mismatch
-        return self:error("Invalid string literal")
-    end
-end
-
-do -- Expression Parsing --
-    ---@return ExpressionNode | nil
-    function Parser:tryParseExpression()
-        return self:tryParseBinaryExpression(0)
-    end
-
-    ---@return ExpressionNode
-    function Parser:parseExpression()
-        local expression = self:tryParseExpression()
-        return self:assertf(expression, "Expected expression")
-    end
-
-    --- Parse a binary expression. Binary expressions are expressions that have two operands.
-    ---
-    --- e.g. `1 + 2` `1 + 2 * 3` `1 + 2 * 3 / 4` `1 + 2 * 3 / 4 ^ 5`
-    ---@param minPrecedence number
-    ---@return ExpressionNode | nil
-    function Parser:tryParseBinaryExpression(minPrecedence)
-        local left = self:tryParseUnaryExpression()
-        local token = self:currentToken()
-
-        if not left then return nil end
-
-        while token.type == TokenType.SYMBOL or token.type == TokenType.KEYWORD do
-            local position = self:getPosition()
-
-            local lbp, rbp = Defs.getPrecedence(token.value)
-            if lbp <= minPrecedence then
-                break
+            if self:match("else") then
+                elseBlock = self:parseBlock()
             end
 
-            self:advanceToken()
-            local right = self:tryParseBinaryExpression(rbp)
-            left = Ast.BinaryOpExpressionNode:new({left = left, right = right, operator = token.value}, position)
-            token = self:currentToken()
+            self:expect("end")
+
+            return Ast.IfStatNode:new({ifNodes = ifNodes, elseBlock = elseBlock}, position)
         end
 
-        return left
-    end
+        -- for Name `=` exp `,` exp [`,` exp] do block end |
+        -- for namelist in explist do block end
+        if self:match("for") then
+            local name1 = self:expect(TokenType.NAME).value
 
-    --- Parse a unary expression. Unary expressions are expressions that have a single operand.
-    ---
-    --- e.g. `not 1` `not not x` `-x` `1`
-    ---@return ExpressionNode | nil
-    function Parser:tryParseUnaryExpression()
-        local token = self:currentToken()
+            if self:match("=") then
+                --> NumericForStat
 
-        if token.type == TokenType.SYMBOL then
-            if token.value == "-" or token.value == "not" then
-                local position = self:getPosition()
+                local startExpr = self:parseExpression()
+                self:expect(",")
+                local endExpr = self:parseExpression()
 
-                self:advanceToken()
-                local expression = self:tryParseUnaryExpression()
-                return Ast.UnaryOpExpressionNode:new({expression = expression, operator = token.value}, position)
+                local stepExpr = nil
+                if self:match(",") then
+                    stepExpr = self:parseExpression()
+                end
+
+                self:expect("do")
+                local block = self:parseBlock()
+                self:expect("end")
+
+                return Ast.NumericForStatNode:new({name = name1, startExpr = startExpr, endExpr = endExpr, stepExpr = stepExpr, block = block}, position)
+            else
+                --> IterativeForStat
+
+                local namelist = {name1}
+                while self:match(",") do
+                    local name = self:expect(TokenType.NAME).value
+                    table.insert(namelist, name)
+                end
+
+                self:expect("in")
+                local explist = self:parseExpressionList()
+                self:expect("do")
+                local block = self:parseBlock()
+                self:expect("end")
+                
+                return Ast.IterativeForStatNode:new({names = namelist, expressions = explist, block = block}, position)
             end
         end
 
-        return self:tryParsePrimaryExpression()
-    end
+        -- function funcname funcbody
+        if self:match("function") then
+            local funcname = self:parseFunctionName()
 
-    ---@return ExpressionNode | nil
-    function Parser:tryParsePrimaryExpression()
-        local position = self:getPosition()
-        local token = self:currentToken()
+            -- funcbody ::= '(' [parlist] ')' block end
+            self:expect("(")
+            local parlist = self:parseNamelist(true, true)
+            self:expect(")")
 
-        -- Literals
-        if token.type == TokenType.NUMBER_LITERAL then
-            local number = self:literalToNumber(token.value)
-            self:advanceToken()
-            return Ast.NumberLiteralExpressionNode:new({value = number}, position)
+            local block = self:parseBlock()
+
+            return Ast.FunctionDeclarationStatNode:new({name = funcname, parameters = parlist, block = block}, position)
         end
 
-        if token.type == TokenType.STRING_LITERAL then
-            local string = self:literalToString(token.value)
-            self:advanceToken()
-            return Ast.StringLiteralExpressionNode:new({value = string}, position)
-        end
+        -- local namelist ['=' explist]
+        if self:match("local") then
+            local namelist = self:parseNamelist()
+            local explist = {}
 
-        if token.type == TokenType.KEYWORD then
-            if token.value == "nil" then
-                self:advanceToken()
-                return Ast.NilLiteralExpressionNode:new({value = nil}, position)
+            if self:match("=") then
+                explist = self:parseExpressionList()
             end
 
-            if token.value == "true" or token.value == "false" then
-                self:advanceToken()
-                return Ast.BooleanLiteralExpressionNode:new({value = (token.value == "true")}, position)
-            end
+            return Ast.LocalVariableAssignmentStatNode:new({names = namelist, expressions = explist}, position)
         end
 
-        -- Name and function calls
-        if token.type == TokenType.NAME then
-            local name = token.value
-            self:advanceToken()
-
-            -- TODO
-            -- if self:currentTokenIs("(") then
-            --     return self:parseFunctionCallExpression(name)
-            -- end
-
-            return Ast.NameExpressionNode:new({name = name}, position)
-        end
-
-        -- self:error("Unexpected token")
         return nil
     end
 
-    ---@return FunctionCallExpressionNode
-    function Parser:parseFunctionCallExpression()
-        local position = self:getPosition()
 
-        local target = self:parseExpression()
-        local method = nil
-        local args
+    --- `retstat ::= return [explist]`
+    ---@return ReturnStatNode?
+    function Parser:tryReturnStat()
+        local position = self:peekPosition()
 
-        if self:currentTokenIs(":") then
-            self:skipExceptedToken(":")
-
-            method = self:exceptedCurrentToken(TokenType.NAME).value
-            self:advanceToken()
+        if self:match("return") then
+            local explist = self:parseExpressionList(true)
+            return Ast.ReturnStatNode:new({expressions = explist}, position)
         end
 
-        if self:currentTokenIs("(") then
-            -- 1. foo(bar, baz, ...)
-            self:skipExceptedToken("(")
-            args = self:parseExpressionList(")")
-        elseif self:currentTokenIs(TokenType.STRING_LITERAL) then
-            -- 2. foo "bar"
-            args = {self:literalToString(self:currentToken().value)}
-            self:advanceToken()
-        else
-            -- 3. table literals
-            -- TODO: table literals
-            self:error("TODO: table literals")
-        end
-
-        return Ast.FunctionCallExpressionNode:new({
-            target = target,
-            method = method,
-            args = args
-        }, position)
+        return nil
     end
 
-    ---@param endToken TokenType | string | nil
-    ---@return ExpressionNode[] | nil
-    function Parser:parseExpressionList(endToken)
-        self:assertf(endToken ~= ",", "Internal Error: Invalid end token")
 
-        local expressions = {}
-        while true do
-            local expression = self:tryParseExpression()
-            if not expression then break end
+    --- namelist ::= Name {',' Name}
+    --- parlist ::= namelist [',' '...'] | '...'
+    ---@param allowEmpty boolean?
+    ---@param allowVarargs boolean?
+    ---@return string[]
+    function Parser:parseNamelist(allowEmpty, allowVarargs)
+        -- case 1: '...'
+        if allowVarargs and self:match("...") then
+            return {"..."}
+        end
 
-            table.insert(expressions, expression)
+        -- case 2: [namelist] is empty
+        if allowEmpty and self:peek().type ~= TokenType.NAME then
+            return {}
+        end
 
-            if self:currentTokenIs(",") then
-                self:advanceToken()
-            else
+        -- Name
+        local namelist = {}
+        local name = self:expect(TokenType.NAME).value
+        table.insert(namelist, name)
+
+        -- {',' Name}
+        while self:match(",") do
+            -- '...'
+            if allowVarargs and self:match("...") then
+                table.insert(namelist, "...")
                 break
             end
+
+            -- Name
+            local name = self:expect(TokenType.NAME).value
+            table.insert(namelist, name)
         end
 
-        if endToken then
-            self:skipExceptedToken(endToken)
+        return namelist
+    end
+
+
+    --- funcname ::= Name {'.' Name} [':' Name]
+    ---@return string
+    function Parser:parseFunctionName()
+        -- Name
+        local funcname = {self:expect(TokenType.NAME).value}
+
+        -- {'.' Name}
+        while self:match(".") do
+            local name = self:expect(TokenType.NAME).value
+            table.insert(funcname, ".")
+            table.insert(funcname, name)
         end
 
-        return expressions
+        -- [':' Name]
+        if self:match(":") then
+            local name = self:expect(TokenType.NAME).value
+            table.insert(funcname, ":")
+            table.insert(funcname, name)
+        end
+
+        -- return as a concatnated string
+        return table.concat(funcname)
+    end
+end
+
+
+-- Expression parsing --
+do
+    local unaryOperators = {
+        ["not"] = true,
+        ["-"] = true,
+        ["#"] = true,
+        ["~"] = true,
+    }
+
+
+    function Parser:parseExpression()
+
+    end
+
+
+    function Parser:tryUnaryOpExpression()
+        local position = self:peekPosition()
+        local token = self:peek()
+        local isSpecialToken = token.type == TokenType.KEYWORD or token.type == TokenType.SYMBOL
+        local isUnaryOp = isSpecialToken and unaryOperators[token.value]
+        
+        if isUnaryOp then
+            local operator = self:next().value
+            local expression = self:parseExpression()
+            return Ast.UnaryOpExpressionNode:new({operator = operator, expression = expression}, position)
+        end
+
+        return nil
+    end
+
+
+    function Parser:tryLiteralExpression()
+        local position = self:peekPosition()
+
+        -- nil
+        if self:match("nil") then
+            return Ast.NilLiteralExpressionNode:new({value = nil}, position)
+        end
+
+        -- true | false
+        if self:match("true") or self:match("false") then
+            local value = self:current().value == "true"
+            return Ast.BooleanLiteralExpressionNode:new({value = value}, position)
+        end
+
+        -- Numeral
+        if self:match(TokenType.NUMBER_LITERAL) then
+            local value = self:current().value
+
+            local number
+            if value:match("^0o") then
+                number = tonumber(value:sub(3):gsub("_", ""), 8)
+            else
+                number = tonumber(value:gsub("_", ""))
+            end
+            number = self:assert(number, ("malformed number near '%s'"):format(value))
+
+            return Ast.NumberLiteralExpressionNode:new({value = number}, position)
+        end
+
+        -- LiteralString
+        if self:match(TokenType.STRING_LITERAL) then
+            local value = self:current().value
+
+            if value:match("^['\"]") then
+                -- "Short string"
+                value = value:sub(2, -2)
+            else
+                -- [[Long string]]
+                value = value:gsub("^%[=-%[\n?", "")
+                value = value:gsub("%]=-%]$", "")
+            end
+
+            return Ast.StringLiteralExpressionNode:new({value = value}, position)
+        end
+
+        -- ...
+        if self:match("...") then
+            return Ast.VarargLiteralExpressionNode:new({value = {kind = "..."}}, position)
+        end
+
+        return nil
+    end
+
+
+    --- Returns the left-binding power and right-binding power of a operator.
+    ---@param symbol string
+    ---@return integer, integer
+    function Parser:operatorBindingPower(symbol)
+        local bindingPower = {
+            ["^"]  = {121, 120}, -- #1 (left associative)
+            ["*"]  = {110}, -- #2
+            ["/"]  = {110},
+            ["//"] = {110},
+            ["%"]  = {110},
+            ["+"]  = {100},
+            ["-"]  = {100},
+            [".."] = {91, 90}, -- #3 (left associative)
+            ["<<"] = {80}, -- #4
+            [">>"] = {80},
+            ["<"]  = {70}, -- #5
+            [">"]  = {70},
+            ["<="] = {70},
+            [">="] = {70},
+            ["=="] = {60}, -- #6
+            ["~="] = {60},
+            ["and"] = {30}, -- #7
+            ["or"] = {20}, -- #8
+        }
+
+        local power = bindingPower[symbol] or {0, 0}
+        local lbp = power[1]
+        local rbp = power[2] or lbp + 1
+        return lbp, rbp
     end
 end
 

@@ -2,69 +2,66 @@ chunk ::= block
 
 block ::= {stat} [retstat]
 
-stat ::=  ";" | 
-        varlist "=" explist | 
-        functioncall | 
-        label | 
-        "break" | 
-        "goto" Name | 
-        "do" block "end" | 
-        "while" exp "do" block "end" | 
-        "repeat" block "until" exp | 
-        ifStat | 
-        "for" Name "=" exp "," exp ["," exp] "do" block "end" | 
-        "for" namelist "in" explist "do" block "end" | 
-        "function" funcname funcbody | 
-        "local" "function" Name funcbody | 
-        "local" namelist ["=" explist] |
-        namelist ["=" explist]
+stat ::=  ';' |
+	 varlist '=' explist |
+	 functioncall |
+	 label |
+	 break |
+	 goto Name |
+	 do block end |
+	 while exp do block end |
+	 repeat block until exp |
+	 if exp then block {elseif exp then block} [else block] end |
+	 for Name '=' exp ',' exp [',' exp] do block end |
+	 for namelist in explist do block end |
+	 function funcname funcbody |
+	 local function Name funcbody |
+	 local attnamelist ['=' explist]
 
-ifStat ::= "if" exp "then" block {"elseif" exp "then" block} ["else" block] "end" |
-    "if" Name "=" exp "then" block {"elseif" exp "then" block} ["else" block] "end"
+attnamelist ::=  Name attrib {',' Name attrib}
 
-retstat ::= "return" [explist] [";"]
+attrib ::= ['<' Name '>']
 
-label ::= "::" Name "::"
+retstat ::= return [explist] [';']
 
-funcname ::= Name {"." Name} [":" Name]
+label ::= '::' Name '::'
 
-varlist ::= var {"," var}
+funcname ::= Name {'.' Name} [':' Name]
 
-var ::=  Name | prefixexp "[" exp "]" | prefixexp "." Name 
+varlist ::= var {',' var}
 
-namelist ::= Name {"," Name}
+var ::=  Name | prefixexp '[' exp ']' | prefixexp '.' Name
 
-explist ::= exp {"," exp}
+namelist ::= Name {',' Name}
 
-exp ::=  "nil" | "false" | "true" | Number | String | "..." | functiondef | 
-        prefixexp | tableconstructor | exp binop exp | unop exp | muaExp
+explist ::= exp {',' exp}
 
-muaExp ::= ifStat
+exp ::=  nil | false | true | Numeral | LiteralString | '...' | functiondef |
+	 prefixexp | tableconstructor | exp binop exp | unop exp
 
+prefixexp ::= var | functioncall | '(' exp ')'
 
-prefixexp ::= var | functioncall | "(" exp ")"
+functioncall ::=  prefixexp args | prefixexp ':' Name args
 
-functioncall ::=  prefixexp args | prefixexp ":" Name args 
+args ::=  '(' [explist] ')' | tableconstructor | LiteralString
 
-args ::=  "(" [explist] ")" | tableconstructor | String
+functiondef ::= function funcbody
 
-functiondef ::= "function" funcbody |
-                "fn" funcbody
+funcbody ::= '(' [parlist] ')' block end
 
-funcbody ::= "(" [parlist] ")" block "end"
+parlist ::= namelist [',' '...'] | '...'
 
-parlist ::= namelist ["," "..."] | "..."
-
-tableconstructor ::= "{" [fieldlist] "}"
+tableconstructor ::= '{' [fieldlist] '}'
 
 fieldlist ::= field {fieldsep field} [fieldsep]
 
-field ::= "[" exp "]" "=" exp | Name "=" exp | exp
+field ::= '[' exp ']' '=' exp | Name '=' exp | exp
 
-fieldsep ::= "," | ";"
+fieldsep ::= ',' | ';'
 
-binop ::= "+" | "-" | "*" | "/" | "^" | "%" | ".." | 
-        "<" | "<=" | ">" | ">=" | "==" | "~=" | 
-        "and" | "or"
+binop ::=  '+' | '-' | '*' | '/' | '//' | '^' | '%' |
+	 '&' | '~' | '|' | '>>' | '<<' | '..' |
+	 '<' | '<=' | '>' | '>=' | '==' | '~=' |
+	 and | or
 
-unop ::= "-" | "not" | "#"
+unop ::= '-' | not | '#' | '~'

@@ -2,36 +2,37 @@
 local Ast = {}
 
 ---@alias NODETYPE
----| NODETYPE_STMT
+---| NODETYPE_STAT
 ---| NODETYPE_EXPR
 ---| "UnknownNode"
 
----@alias NODETYPE_STMT
----| "DoStatementNode"
----| "IfStatementNode"
----| "WhileStatementNode"
----| "IterativeForStatementNode"
----| "NumericForStatementNode"
----| "RepeatStatementNode"
----| "FunctionDeclarationStatementNode"
----| "LocalFunctionDeclarationStatementNode"
----| "VariableAssignmentStatementNode"
----| "LocalVariableAssignmentStatementNode"
----| "ReturnStatementNode"
----| "BreakStatementNode"
----| "FunctionCallStatementNode"
----| "GotoLabelStatementNode"
----| "GotoStatementNode"
+---@alias NODETYPE_STAT
+---| "DoStatNode"
+---| "IfStatNode"
+---| "WhileStatNode"
+---| "IterativeForStatNode"
+---| "NumericForStatNode"
+---| "RepeatStatNode"
+---| "FunctionDeclarationStatNode"
+---| "LocalFunctionDeclarationStatNode"
+---| "VariableAssignmentStatNode"
+---| "LocalVariableAssignmentStatNode"
+---| "ReturnStatNode"
+---| "BreakStatNode"
+---| "FunctionCallStatNode"
+---| "GotoLabelStatNode"
+---| "GotoStatNode"
 
 ---@alias NODETYPE_LITERAL
 ---| "NumberLiteralExpressionNode"
 ---| "StringLiteralExpressionNode"
 ---| "NilLiteralExpressionNode"
 ---| "BooleanLiteralExpressionNode"
----| "TableLiteralExpressionNode"
+---| "VarargLiteralExpressionNode"
 
 ---@alias NODETYPE_EXPR
 ---| NODETYPE_LITERAL
+---| "TableConstructorExpressionNode"
 ---| "FunctionCallExpressionNode"
 ---| "OpExpressionNode"
 ---| "BinaryOpExpressionNode"
@@ -103,100 +104,100 @@ do
 end
 
 ---@class AbstractSyntaxTree
----@field [integer] StatementNode
+---@field [integer] StatNode
 ---@field filename string
 
 
----@class StatementNode : Node
-Ast.StatementNode = Ast.Node:extend("UnknownNode")
+---@class StatNode : Node
+Ast.StatNode = Ast.Node:extend("UnknownNode")
 
----@class DoStatementNode : StatementNode
----@field type "DoStatementNode"
----@field block StatementNode[]
-Ast.DoStatementNode = Ast.StatementNode:extend("DoStatementNode")
+---@class DoStatNode : StatNode
+---@field type "DoStatNode"
+---@field block StatNode[]
+Ast.DoStatNode = Ast.StatNode:extend("DoStatNode")
 
 ---@class _AtomicIf
 ---@field condition ExpressionNode
----@field block StatementNode[]
+---@field block StatNode[]
 
----@class IfStatementNode : StatementNode
----@field type "IfStatementNode"
+---@class IfStatNode : StatNode
+---@field type "IfStatNode"
 ---@field ifNodes _AtomicIf[]
----@field elseBlock StatementNode[]?
-Ast.IfStatementNode = Ast.StatementNode:extend("IfStatementNode")
+---@field elseBlock StatNode[]?
+Ast.IfStatNode = Ast.StatNode:extend("IfStatNode")
 
----@class WhileStatementNode : StatementNode
----@field type "WhileStatementNode"
+---@class WhileStatNode : StatNode
+---@field type "WhileStatNode"
 ---@field condition ExpressionNode
----@field block StatementNode[]
-Ast.WhileStatementNode = Ast.StatementNode:extend("WhileStatementNode")
+---@field block StatNode[]
+Ast.WhileStatNode = Ast.StatNode:extend("WhileStatNode")
 
----@class IterativeForStatementNode : StatementNode
----@field type "IterativeForStatementNode"
+---@class IterativeForStatNode : StatNode
+---@field type "IterativeForStatNode"
 ---@field names string[]
 ---@field expressions ExpressionNode[]
----@field block StatementNode[]
-Ast.IterativeForStatementNode = Ast.StatementNode:extend("IterativeForStatementNode")
+---@field block StatNode[]
+Ast.IterativeForStatNode = Ast.StatNode:extend("IterativeForStatNode")
 
----@class NumericForStatementNode : StatementNode
----@field type "NumericForStatementNode"
+---@class NumericForStatNode : StatNode
+---@field type "NumericForStatNode"
 ---@field name string
----@field start ExpressionNode
----@field end ExpressionNode
----@field step ExpressionNode?
----@field block StatementNode[]
-Ast.NumericForStatementNode = Ast.StatementNode:extend("NumericForStatementNode")
+---@field startExpr ExpressionNode
+---@field endExpr ExpressionNode
+---@field stepExpr ExpressionNode?
+---@field block StatNode[]
+Ast.NumericForStatNode = Ast.StatNode:extend("NumericForStatNode")
 
----@class RepeatStatementNode : StatementNode
----@field type "RepeatStatementNode"
----@field block StatementNode[]
+---@class RepeatStatNode : StatNode
+---@field type "RepeatStatNode"
+---@field block StatNode[]
 ---@field untilCondition ExpressionNode
-Ast.RepeatStatementNode = Ast.StatementNode:extend("RepeatStatementNode")
+Ast.RepeatStatNode = Ast.StatNode:extend("RepeatStatNode")
 
----@class FunctionDeclarationStatementNode : StatementNode
----@field type "FunctionDeclarationStatementNode"
+---@class FunctionDeclarationStatNode : StatNode
+---@field type "FunctionDeclarationStatNode"
 ---@field name string
 ---@field parameters string[]
----@field block StatementNode[]
-Ast.FunctionDeclarationStatementNode = Ast.StatementNode:extend("FunctionDeclarationStatementNode")
+---@field block StatNode[]
+Ast.FunctionDeclarationStatNode = Ast.StatNode:extend("FunctionDeclarationStatNode")
 
----@class LocalFunctionStatementNode : FunctionDeclarationStatementNode
----@field type "LocalFunctionDeclarationStatementNode"
-Ast.LocalFunctionDeclarationStatementNode = Ast.FunctionDeclarationStatementNode:extend("LocalFunctionDeclarationStatementNode")
+---@class LocalFunctionStatNode : FunctionDeclarationStatNode
+---@field type "LocalFunctionDeclarationStatNode"
+Ast.LocalFunctionDeclarationStatNode = Ast.FunctionDeclarationStatNode:extend("LocalFunctionDeclarationStatNode")
 
----@class VariableAssignmentStatementNode : StatementNode
----@field type "VariableAssignmentStatementNode"
+---@class VariableAssignmentStatNode : StatNode
+---@field type "VariableAssignmentStatNode"
 ---@field names string[]
 ---@field expressions ExpressionNode[]
-Ast.VariableAssignmentStatementNode = Ast.StatementNode:extend("VariableAssignmentStatementNode")
+Ast.VariableAssignmentStatNode = Ast.StatNode:extend("VariableAssignmentStatNode")
 
----@class LocalVariableDeclarationStatementNode : VariableAssignmentStatementNode
----@field type "LocalVariableAssignmentStatementNode"
-Ast.LocalVariableAssignmentStatementNode = Ast.VariableAssignmentStatementNode:extend("LocalVariableAssignmentStatementNode")
+---@class LocalVariableDeclarationStatNode : VariableAssignmentStatNode
+---@field type "LocalVariableAssignmentStatNode"
+Ast.LocalVariableAssignmentStatNode = Ast.VariableAssignmentStatNode:extend("LocalVariableAssignmentStatNode")
 
----@class ReturnStatementNode : StatementNode
----@field type "ReturnStatementNode"
+---@class ReturnStatNode : StatNode
+---@field type "ReturnStatNode"
 ---@field expressions ExpressionNode[]
-Ast.ReturnStatementNode = Ast.StatementNode:extend("ReturnStatementNode")
+Ast.ReturnStatNode = Ast.StatNode:extend("ReturnStatNode")
 
----@class BreakStatementNode : StatementNode
----@field type "BreakStatementNode"
-Ast.BreakStatementNode = Ast.StatementNode:extend("BreakStatementNode")
+---@class BreakStatNode : StatNode
+---@field type "BreakStatNode"
+Ast.BreakStatNode = Ast.StatNode:extend("BreakStatNode")
 
----@class FunctionCallStatementNode : StatementNode
----@field type "FunctionCallStatementNode"
+---@class FunctionCallStatNode : StatNode
+---@field type "FunctionCallStatNode"
 ---@field expression FunctionCallExpressionNode
-Ast.FunctionCallStatementNode = Ast.StatementNode:extend("FunctionCallStatementNode")
+Ast.FunctionCallStatNode = Ast.StatNode:extend("FunctionCallStatNode")
 
----@class GotoLabelStatementNode : StatementNode
----@field type "GotoLabelStatementNode"
+---@class GotoLabelStatNode : StatNode
+---@field type "GotoLabelStatNode"
 ---@field name string
-Ast.GotoLabelStatementNode = Ast.StatementNode:extend("GotoLabelStatementNode")
+Ast.GotoLabelStatNode = Ast.StatNode:extend("GotoLabelStatNode")
 
----@class GotoStatementNode : StatementNode
----@field type "GotoStatementNode"
+---@class GotoStatNode : StatNode
+---@field type "GotoStatNode"
 ---@field name string
-Ast.GotoStatementNode = Ast.StatementNode:extend("GotoStatementNode")
+Ast.GotoStatNode = Ast.StatNode:extend("GotoStatNode")
 
 
 ---@class ExpressionNode : Node
@@ -222,13 +223,17 @@ Ast.NilLiteralExpressionNode = Ast.LiteralExpressionNode:extend("NilLiteralExpre
 ---@field value boolean
 Ast.BooleanLiteralExpressionNode = Ast.LiteralExpressionNode:extend("BooleanLiteralExpressionNode")
 
+---@class VarargLiteralExpressionNode : LiteralExpressionNode
+---@field value { kind: "..." }
+Ast.VarargLiteralExpressionNode = Ast.LiteralExpressionNode:extend("VarargLiteralExpressionNode")
+
 ---@class _TableNode
 ---@field key ExpressionNode
 ---@field value ExpressionNode
 
----@class TableLiteralExpressionNode : LiteralExpressionNode
+---@class TableConstructorExpressionNode : ExpressionNode
 ---@field fields _TableNode[]
-Ast.TableLiteralExpressionNode = Ast.LiteralExpressionNode:extend("TableLiteralExpressionNode")
+Ast.TableConstructorExpressionNode = Ast.ExpressionNode:extend("TableConstructorExpressionNode")
 
 ---@class FunctionCallExpressionNode : ExpressionNode
 ---@field target ExpressionNode
