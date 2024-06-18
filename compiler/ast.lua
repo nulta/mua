@@ -38,6 +38,7 @@ local Ast = {}
 ---| "UnaryOpExpNode"
 ---| "NameExpNode"
 ---| "TableIndexExpNode"
+---| "FunctionDefExpNode"
 
 do
     ---@class Node
@@ -208,18 +209,22 @@ Ast.ExpNode = Ast.Node:extend("UnknownNode")
 Ast.LiteralExpNode = Ast.ExpNode:extend("UnknownNode")
 
 ---@class NumberLiteralExpNode : LiteralExpNode
+---@field type "NumberLiteralExpNode"
 ---@field value number
 Ast.NumberLiteralExpNode = Ast.LiteralExpNode:extend("NumberLiteralExpNode")
 
 ---@class StringLiteralExpNode : LiteralExpNode
+---@field type "StringLiteralExpNode"
 ---@field value string
 Ast.StringLiteralExpNode = Ast.LiteralExpNode:extend("StringLiteralExpNode")
 
 ---@class NilLiteralExpNode : LiteralExpNode
+---@field type "NilLiteralExpNode"
 ---@field value nil
 Ast.NilLiteralExpNode = Ast.LiteralExpNode:extend("NilLiteralExpNode")
 
 ---@class BooleanLiteralExpNode : LiteralExpNode
+---@field type "BooleanLiteralExpNode"
 ---@field value boolean
 Ast.BooleanLiteralExpNode = Ast.LiteralExpNode:extend("BooleanLiteralExpNode")
 
@@ -228,34 +233,46 @@ Ast.BooleanLiteralExpNode = Ast.LiteralExpNode:extend("BooleanLiteralExpNode")
 ---@field value ExpNode
 
 ---@class TableConstructorExpNode : ExpNode
+---@field type "TableConstructorExpNode"
 ---@field fields _TableNode[]
 Ast.TableConstructorExpNode = Ast.ExpNode:extend("TableConstructorExpNode")
 
 ---@class FunctionCallExpNode : ExpNode
+---@field type "FunctionCallExpNode"
 ---@field target ExpNode
 ---@field method string?
 ---@field args ExpNode[]
 Ast.FunctionCallExpNode = Ast.ExpNode:extend("FunctionCallExpNode")
 
 ---@class BinaryOpExpNode : ExpNode
+---@field type "BinaryOpExpNode"
 ---@field operator string
 ---@field left ExpNode
 ---@field right ExpNode
 Ast.BinaryOpExpNode = Ast.ExpNode:extend("BinaryOpExpNode")
 
 ---@class UnaryOpExpNode : ExpNode
+---@field type "UnaryOpExpNode"
 ---@field operator string
 ---@field expression ExpNode
 Ast.UnaryOpExpNode = Ast.ExpNode:extend("UnaryOpExpNode")
 
 ---@class NameExpNode : ExpNode
+---@field type "NameExpNode"
 ---@field name string | "..."
 Ast.NameExpNode = Ast.ExpNode:extend("NameExpNode")
 
 ---@class TableIndexExpNode : ExpNode
+---@field type "TableIndexExpNode"
 ---@field target ExpNode
 ---@field key ExpNode
 Ast.TableIndexExpNode= Ast.ExpNode:extend("TableIndexExpNode")
+
+---@class FunctionDefExpNode : ExpNode
+---@field type "FunctionDefExpNode"
+---@field parameters string[]
+---@field block StatNode[]
+Ast.FunctionDefExpNode = Ast.ExpNode:extend("FunctionDefExpNode")
 
 
 return Ast

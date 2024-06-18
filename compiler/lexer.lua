@@ -149,7 +149,8 @@ function Lexer:lex()
 
         if char == "\n" then
             self.line = self.line + 1
-            self:pop()
+            self.column = 1
+            -- self:pop()
         end
 
         if char:match("%s") then

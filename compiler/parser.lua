@@ -165,18 +165,18 @@ do
     function Parser:tryStat()
         local position = self:peekPosition()
 
+        -- functioncall
+        local functionCall = self:tryFunctionCallExp()
+        if functionCall then
+            return Ast.FunctionCallStatNode:new({call = functionCall}, position)
+        end
+
         -- varlist '=' explist
         local varlist = self:tryVarList()
         if varlist then
             self:expect("=")
             local explist = self:parseExpList()
             return Ast.VariableAssignmentStatNode:new({variables = varlist, expressions = explist}, position)
-        end
-
-        -- functioncall
-        local functionCall = self:tryFunctionCallExp()
-        if functionCall then
-            return Ast.FunctionCallStatNode:new({call = functionCall}, position)
         end
 
         -- label
@@ -290,27 +290,26 @@ do
         -- function funcname funcbody
         if self:match("function") then
             local funcname = self:parseFunctionName()
-
-            -- funcbody ::= '(' [parlist] ')' block end
-            self:expect("(")
-            local parlist = self:parseNamelist(true, true)
-            self:expect(")")
-
-            local block = self:parseBlock()
-
-            return Ast.FunctionDeclarationStatNode:new({name = funcname, parameters = parlist, block = block}, position)
+            local body = self:parseFuncBody()
+            return Ast.FunctionDeclarationStatNode:new({name = funcname, parameters = body.parameters, block = body.block}, position)
         end
 
-        -- local namelist ['=' explist]
+        -- local function Name funcbody | local namelist ['=' explist]
         if self:match("local") then
-            local namelist = self:parseNamelist()
-            local explist = {}
+            if self:match("function") then
+                local name = self:expect(TokenType.NAME).value
+                local body = self:parseFuncBody()
+                return Ast.LocalFunctionDeclarationStatNode:new({name = name, parameters = body.parameters, block = body.block}, position)
+            else
+                local namelist = self:parseNamelist()
+                local explist = {}
 
-            if self:match("=") then
-                explist = self:parseExpList()
+                if self:match("=") then
+                    explist = self:parseExpList()
+                end
+
+                return Ast.LocalVariableAssignmentStatNode:new({names = namelist, expressions = explist}, position)
             end
-
-            return Ast.LocalVariableAssignmentStatNode:new({names = namelist, expressions = explist}, position)
         end
 
         return nil
@@ -392,6 +391,19 @@ do
         -- return as a concatnated string
         return table.concat(funcname)
     end
+
+
+    function Parser:parseFuncBody()
+        -- funcbody ::= '(' [parlist] ')' block end
+        self:expect("(")
+        local parlist = self:parseNamelist(true, true)
+        self:expect(")")
+
+        local block = self:parseBlock()
+        self:expect("end")
+
+        return {parameters = parlist, block = block}
+    end
 end
 
 
@@ -427,6 +439,8 @@ do
 
 
     function Parser:primaryExp()
+        local position = self:peekPosition()
+
         -- unop exp
         local unaryOpExp = self:tryUnaryOpExp()
         if unaryOpExp then
@@ -440,7 +454,10 @@ do
         end
 
         -- functiondef
-        --!!! TODO
+        if self:match("function") then
+            local body = self:parseFuncBody()
+            return Ast.FunctionDefExpNode:new(body, position)
+        end
 
         -- LiteralExp
         local literalExp = self:tryLiteralExp()
@@ -594,57 +611,99 @@ do
     end
 
 
+    -- TODO: rewrite PrefixExp, VarExp, FunctionCallExp. They are too complex and entangled.
+
     --- `prefixexp ::= var | functioncall | '(' exp ')'`
-    function Parser:tryPrefixExp()
-        return self:tryVarExp()
-        -- -- '(' exp ')'
-        -- if self:match("(") then
-        --     local expression = self:parseExp()
-        --     self:expect(")")
-        --     return expression
-        -- end
+    function Parser:tryPrefixExp(isFunctionCall)
+        local checkpoint = self:checkpoint()
+        -- Name (implict)
+        -- No name -> no prefixexp
+        if self:peek().type ~= TokenType.NAME then
+            -- '(' exp ')'
+            if self:match("(") then
+                local expression = self:parseExp()
+                self:expect(")")
+                return expression
+            end
 
-        -- -- functioncall
-        -- local functionCall = self:tryFunctionCallExp()
-        -- if functionCall then
-        --     return functionCall
-        -- end
+            return nil
+        end
 
-        -- -- var
-        -- return self:tryVarExp()
+        -- functioncall
+        local functionCall = not isFunctionCall and self:tryFunctionCallExp()
+        if functionCall then
+            return functionCall
+        end
+
+        -- '(' exp ')'
+        if self:match("(") then
+            local expression = self:parseExp()
+            self:expect(")")
+            return expression
+        end
+
+        -- var
+        local var = self:tryVarExp()
+        if var then
+            return var
+        end
+
+        self:rollback(checkpoint)
+        return nil
     end
 
 
     --- `var ::=  Name | prefixexp '[' exp ']' | prefixexp '.' Name`
     function Parser:tryVarExp()
         local position = self:peekPosition()
+        local checkpoint = self:checkpoint()
 
         -- Name
         if self:match(TokenType.NAME) then
             local name = self:current().value
-            return Ast.NameExpNode:new({name = name}, position)
+            local nameNode = Ast.NameExpNode:new({name = name}, position)
+
+            -- Name '[' exp ']'
+            if self:match("[") then
+                local key = self:parseExp()
+                self:expect("]")
+                return Ast.TableIndexExpNode:new({target = nameNode, key = key}, position)
+            end
+
+            -- Name '.' Name
+            if self:match(".") then
+                local position2 = self:peekPosition()
+                local key = self:expect(TokenType.NAME).value
+
+                local keyNode = Ast.StringLiteralExpNode:new({value = key}, position2)
+                return Ast.TableIndexExpNode:new({target = nameNode, key = keyNode}, position)
+            end
+
+            -- NameExpNode
+            return nameNode
         end
 
         -- prefixexp '[' exp ']' | prefixexp '.' Name`
-        -- local prefixexp = self:tryPrefixExp()
-        -- if prefixexp then
-        --     -- prefixexp '[' exp ']'
-        --     if self:match("[") then
-        --         local key = self:parseExp()
-        --         self:expect("]")
-        --         return Ast.TableIndexExpNode:new({target = prefixexp, key = key}, position)
-        --     end
+        local prefixexp = self:tryPrefixExp()
+        if prefixexp then
+            -- prefixexp '[' exp ']'
+            if self:match("[") then
+                local key = self:parseExp()
+                self:expect("]")
+                return Ast.TableIndexExpNode:new({target = prefixexp, key = key}, position)
+            end
 
-        --     -- prefixexp '.' Name
-        --     if self:match(".") then
-        --         local position2 = self:peekPosition()
-        --         local key = self:expect(TokenType.NAME).value
+            -- prefixexp '.' Name
+            if self:match(".") then
+                local position2 = self:peekPosition()
+                local key = self:expect(TokenType.NAME).value
 
-        --         local keyNode = Ast.StringLiteralExpNode:new({value = key}, position2)
-        --         return Ast.TableIndexExpNode:new({target = prefixexp, key = keyNode}, position)
-        --     end
-        -- end
+                local keyNode = Ast.StringLiteralExpNode:new({value = key}, position2)
+                return Ast.TableIndexExpNode:new({target = prefixexp, key = keyNode}, position)
+            end
+        end
 
+        self:rollback(checkpoint)
         return nil
     end
 
@@ -670,30 +729,31 @@ do
     --- functioncall ::=  prefixexp args | prefixexp ':' Name args
     function Parser:tryFunctionCallExp()
         local position = self:peekPosition()
-        local prefixexp = self:tryPrefixExp()
+        local savepoint = self:checkpoint()
+        local prefixexp = self:tryPrefixExp(true)
 
         if prefixexp then
             -- prefixexp args
-            if self:match("(") then
-                local args = self:parseArgsExp()
+            local args = self:parseArgsExp()
+            if args then
                 return Ast.FunctionCallExpNode:new({target = prefixexp, args = args}, position)
             end
 
             -- prefixexp ':' Name args
             if self:match(":") then
                 local method = self:expect(TokenType.NAME).value
-                local args = self:parseArgsExp()
+                local args = self:assert(self:parseArgsExp())
                 return Ast.FunctionCallExpNode:new({target = prefixexp, method = method, args = args}, position)
             end
         end
 
+        self:rollback(savepoint)
         return nil
     end
 
 
     --- args ::=  '(' [explist] ')' | tableconstructor | LiteralString
     function Parser:parseArgsExp()
-        local position = self:peekPosition()
 
         -- '(' [explist] ')'
         if self:match("(") then
@@ -718,7 +778,7 @@ do
             return {literalString}
         end
 
-        return {}
+        return nil
     end
 
     --- tableconstructor ::= '{' [fieldlist] '}'
@@ -824,43 +884,58 @@ do
     end
 end
 
--- Infinite loop protector --
-do
-    ---@type { [string]: integer }
-    --- Key: function name, Value: tokenIndex
-    Parser.loopProtection = {}
 
-    local protectedFunctions = {
-        -- ["tryStat"] = true,
-        -- ["tryReturnStat"] = true,
-        -- ["tryExp"] = true,
-        -- ["tryLiteralExp"] = true,
-        -- ["tryFunctionCallExp"] = true,
-        -- ["tryPrefixExp"] = true,
-        -- ["tryVarExp"] = true,
-        -- ["tryTableConstructorExp"] = true,
-        -- ["tryUnaryOpExp"] = true,
-    }
+-- Memoize --
+local MEMOIZE = true
+if MEMOIZE then
+    local memos = {}
 
-    for name, func in pairs(Parser) do
-        if not protectedFunctions[name] then goto Continue end
-        assert(type(func) == "function")
+    local function memoize(funcname)
+        local memoizer = Parser[funcname]
+        local memo = {}
+        memos[funcname] = memo
 
-        Parser[name] = function(...)
-            p(...)
-            if Parser.loopProtection[name] == Parser.tokenIndex then
-                -- Locked; just return nil
-                return nil
-            else
-                -- Lock them
-                Parser.loopProtection[name] = Parser.tokenIndex
-                return func(...)
+        Parser[funcname] = function(self, argu)
+            local key = self.tokenIndex .. tostring(argu)
+            
+            if not memo[key] then
+                memo[key] = memoizer(self, argu)
+            end
+                
+            return memo[key]
+        end
+    end
+
+
+    memoize("tryStat")
+    memoize("tryPrefixExp")
+    memoize("tryVarExp")
+    memoize("tryFunctionCallExp")
+    memoize("tryExp")
+
+    function Parser:clearMemo()
+        for _, memo in pairs(memos) do
+            for key, _ in pairs(memo) do
+                memo[key] = nil
             end
         end
+    end
 
-        ::Continue::
+
+    local _next = Parser.next
+    ---@diagnostic disable-next-line: duplicate-set-field
+    Parser.next = function(self, ...)
+        self:clearMemo()
+        return _next(self, ...)
+    end
+
+
+    local _rollback = Parser.rollback
+    ---@diagnostic disable-next-line: duplicate-set-field
+    Parser.rollback = function(self, ...)
+        self:clearMemo()
+        return _rollback(self, ...)
     end
 end
-
 
 return Parser

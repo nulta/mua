@@ -154,5 +154,26 @@ do
     testParser("a, bb, ccc = aaa, 123, 'qwer'")
 
     testParser("hello_world(1,2,3,10+20*30)")
+    testParser("hello_world()")
     testParser("hello_world(self, create_world())")
+
+    testParser([[
+local function exceptError(code)
+counts = counts + 1
+print("")
+print("")
+print("[ Test #" .. counts .. " ]")
+if not code:find("\n") then
+    print("> " .. code)
+end
+local tokens = Lexer.new(code):lex()
+local ok, err = pcall(function() Parser.new(tokens):parse() end)
+if not ok then
+    print("Caught excepted error")
+    print(err)
+else
+    error("Excepted error, but the code was executed with no error")
+end
+end
+    ]])
 end
