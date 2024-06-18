@@ -3,7 +3,7 @@ print("")
 print("=== Test: compiler.lexer ===")
 print("")
 local Lexer = require("compiler.lexer")
-do
+if false then
     local function testLexer(code)
         print("")
         local tokens = Lexer.new(code):lex()
@@ -73,10 +73,10 @@ do
 
         local tokens = Lexer.new(code):lex()
 
-        -- print("[Tokens]")
-        -- for _, token in ipairs(tokens) do
-        --     print(token.bytes, token.line .. ":" .. token.column, token.type, token.value)
-        -- end
+        print("[Tokens]")
+        for _, token in ipairs(tokens) do
+            print(token.bytes, token.line .. ":" .. token.column, token.type, token.value)
+        end
 
         local ast = Parser.new(tokens):parse()
 

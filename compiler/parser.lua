@@ -16,7 +16,7 @@ local Parser = {}
 function Parser.new(tokens, filename)
     local self = setmetatable({}, { __index = Parser })
     self.tokens = tokens
-    self.tokenIndex = 1
+    self.tokenIndex = 0
     self.tree = {filename = filename or "[?]"}
     return self
 end
@@ -41,14 +41,14 @@ do
     ---@return Token
     function Parser:peek(index)
         index = index or 1
-        return self.tokens[self.tokenIndex]
+        return self.tokens[self.tokenIndex + index]
     end
 
 
     ---@return Token
     function Parser:next()
-        local token = self.tokens[self.tokenIndex]
         self.tokenIndex = self.tokenIndex + 1
+        local token = self.tokens[self.tokenIndex]
         return token
     end
 
@@ -70,7 +70,7 @@ do
     ---@return T
     function Parser:assert(condition, message)
         if not condition then
-            self:error(message or ("unexcepted symbol near '%s'"):format(type, self:current().value))
+            self:error(message or ("unexcepted symbol near '%s'"):format(self:current().value))
         end
 
         return condition
@@ -102,7 +102,9 @@ do
         end
 
         ---@diagnostic disable: missing-return
-        self:error(("unexcepted symbol near '%s'"):format(type, self:current().value))
+        self:error(
+            ("'%s' expected near '%s'"):format(table.concat({...}, "','"), self:current().value)
+        )
     end
 
 
@@ -127,6 +129,7 @@ do
     ---@return AbstractSyntaxTree
     function Parser:parse()
         local block = self:parseBlock()
+
         self:expect(TokenType.EOF)
 
         for _, node in ipairs(block) do
@@ -143,7 +146,8 @@ do
         local block = {}
 
         -- {stat}
-        local stat repeat
+        local stat
+        repeat
             stat = self:tryStat()
             table.insert(block, stat)
         until not stat
@@ -161,18 +165,18 @@ do
     function Parser:tryStat()
         local position = self:peekPosition()
 
-        -- functioncall
-        local functionCall = self:tryFunctionCallExp()
-        if functionCall then
-            return Ast.FunctionCallStatNode:new({call = functionCall}, position)
-        end
-
         -- varlist '=' explist
         local varlist = self:tryVarList()
         if varlist then
             self:expect("=")
             local explist = self:parseExpList()
             return Ast.VariableAssignmentStatNode:new({variables = varlist, expressions = explist}, position)
+        end
+
+        -- functioncall
+        local functionCall = self:tryFunctionCallExp()
+        if functionCall then
+            return Ast.FunctionCallStatNode:new({call = functionCall}, position)
         end
 
         -- label
@@ -411,21 +415,22 @@ do
 
     --- `exp ::= (LiteralExp) | functiondef | prefixexp | tableconstructor | exp binop exp | unop exp`
     function Parser:tryExp()
-        local position = self:peekPosition()
-
-        -- LiteralExp
-        local literalExp = self:tryLiteralExp()
-        if literalExp then
-            return literalExp
+        -- exp binop exp
+        local binop = self:parseBinaryOpExp()
+        if binop then
+            return binop
         end
 
-        -- functiondef
-        --!!! TODO
+        -- primaryExp
+        return self:primaryExp()
+    end
 
-        -- prefixexp
-        local prefixExp = self:tryPrefixExp()
-        if prefixExp then
-            return prefixExp
+
+    function Parser:primaryExp()
+        -- unop exp
+        local unaryOpExp = self:tryUnaryOpExp()
+        if unaryOpExp then
+            return unaryOpExp
         end
 
         -- tableconstructor
@@ -434,14 +439,20 @@ do
             return tableConstructor
         end
 
-        -- unop exp
-        local unaryOpExp = self:tryUnaryOpExp()
-        if unaryOpExp then
-            return unaryOpExp
+        -- functiondef
+        --!!! TODO
+
+        -- LiteralExp
+        local literalExp = self:tryLiteralExp()
+        if literalExp then
+            return literalExp
         end
 
-        -- exp binop exp
-        return self:parseBinaryOpExp()
+        -- prefixexp
+        local prefixExp = self:tryPrefixExp()
+        if prefixExp then
+            return prefixExp
+        end
     end
 
 
@@ -454,8 +465,12 @@ do
         table.insert(explist, expression)
 
         -- [explist]?
-        if allowEmpty and not expression then
-            return {}
+        if not expression then
+            if allowEmpty then
+                return {}
+            else
+                self:error("expression expected")
+            end
         end
 
         -- {',' exp}
@@ -472,7 +487,8 @@ do
     function Parser:parseBinaryOpExp(minBindingPower)
         minBindingPower = minBindingPower or 0
 
-        local left = self:tryExp()
+        ---@type ExpNode
+        local left = self:primaryExp()
         if not left then return nil end
 
         while true do
@@ -535,7 +551,7 @@ do
             if value:match("^0o") then
                 number = tonumber(value:sub(3):gsub("_", ""), 8)
             else
-                number = tonumber(value:gsub("_", ""))
+                number = tonumber(value:gsub("_", ""), 10)
             end
             number = self:assert(number, ("malformed number near '%s'"):format(value))
 
@@ -580,21 +596,22 @@ do
 
     --- `prefixexp ::= var | functioncall | '(' exp ')'`
     function Parser:tryPrefixExp()
-        -- '(' exp ')'
-        if self:match("(") then
-            local expression = self:parseExp()
-            self:expect(")")
-            return expression
-        end
-
-        -- functioncall
-        local functionCall = self:tryFunctionCallExp()
-        if functionCall then
-            return functionCall
-        end
-
-        -- var
         return self:tryVarExp()
+        -- -- '(' exp ')'
+        -- if self:match("(") then
+        --     local expression = self:parseExp()
+        --     self:expect(")")
+        --     return expression
+        -- end
+
+        -- -- functioncall
+        -- local functionCall = self:tryFunctionCallExp()
+        -- if functionCall then
+        --     return functionCall
+        -- end
+
+        -- -- var
+        -- return self:tryVarExp()
     end
 
 
@@ -609,24 +626,24 @@ do
         end
 
         -- prefixexp '[' exp ']' | prefixexp '.' Name`
-        local prefixexp = self:tryPrefixExp()
-        if prefixexp then
-            -- prefixexp '[' exp ']'
-            if self:match("[") then
-                local key = self:parseExp()
-                self:expect("]")
-                return Ast.TableIndexExpNode:new({target = prefixexp, key = key}, position)
-            end
+        -- local prefixexp = self:tryPrefixExp()
+        -- if prefixexp then
+        --     -- prefixexp '[' exp ']'
+        --     if self:match("[") then
+        --         local key = self:parseExp()
+        --         self:expect("]")
+        --         return Ast.TableIndexExpNode:new({target = prefixexp, key = key}, position)
+        --     end
 
-            -- prefixexp '.' Name
-            if self:match(".") then
-                local position2 = self:peekPosition()
-                local key = self:expect(TokenType.NAME).value
+        --     -- prefixexp '.' Name
+        --     if self:match(".") then
+        --         local position2 = self:peekPosition()
+        --         local key = self:expect(TokenType.NAME).value
 
-                local keyNode = Ast.StringLiteralExpNode:new({value = key}, position2)
-                return Ast.TableIndexExpNode:new({target = prefixexp, key = keyNode}, position)
-            end
-        end
+        --         local keyNode = Ast.StringLiteralExpNode:new({value = key}, position2)
+        --         return Ast.TableIndexExpNode:new({target = prefixexp, key = keyNode}, position)
+        --     end
+        -- end
 
         return nil
     end
@@ -806,5 +823,44 @@ do
         return lbp, rbp
     end
 end
+
+-- Infinite loop protector --
+do
+    ---@type { [string]: integer }
+    --- Key: function name, Value: tokenIndex
+    Parser.loopProtection = {}
+
+    local protectedFunctions = {
+        -- ["tryStat"] = true,
+        -- ["tryReturnStat"] = true,
+        -- ["tryExp"] = true,
+        -- ["tryLiteralExp"] = true,
+        -- ["tryFunctionCallExp"] = true,
+        -- ["tryPrefixExp"] = true,
+        -- ["tryVarExp"] = true,
+        -- ["tryTableConstructorExp"] = true,
+        -- ["tryUnaryOpExp"] = true,
+    }
+
+    for name, func in pairs(Parser) do
+        if not protectedFunctions[name] then goto Continue end
+        assert(type(func) == "function")
+
+        Parser[name] = function(...)
+            p(...)
+            if Parser.loopProtection[name] == Parser.tokenIndex then
+                -- Locked; just return nil
+                return nil
+            else
+                -- Lock them
+                Parser.loopProtection[name] = Parser.tokenIndex
+                return func(...)
+            end
+        end
+
+        ::Continue::
+    end
+end
+
 
 return Parser
