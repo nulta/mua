@@ -66,25 +66,27 @@ do
 
     ---@generic T
     ---@param condition T | nil
-    ---@param message string
+    ---@param message string?
     ---@return T
     function Parser:assert(condition, message)
         if not condition then
-            self:error(message)
+            self:error(message or ("unexcepted symbol near '%s'"):format(type, self:current().value))
         end
 
         return condition
     end
 
 
-    ---@param type TokenType | string
+    ---@param ... TokenType | string
     ---@return Token?
-    function Parser:match(type)
+    function Parser:match(...)
         local token = self:peek()
         local isSpecialToken = token.type == TokenType.KEYWORD or token.type == TokenType.SYMBOL
 
-        if (token.type == type) or (isSpecialToken and token.value == type) then
-            return self:next()
+        for _, type in pairs({...}) do
+            if (token.type == type) or (isSpecialToken and token.value == type) then
+                return self:next()
+            end
         end
 
         return nil
@@ -94,15 +96,27 @@ do
     ---@param ... TokenType | string
     ---@return Token
     function Parser:expect(...)
-        for _, type in ipairs({...}) do
-            local match = self:match(type)
-            if match then
-                return match
-            end
+        local match = self:match(...)
+        if match then
+            return match
         end
 
         ---@diagnostic disable: missing-return
         self:error(("unexcepted symbol near '%s'"):format(type, self:current().value))
+    end
+
+
+    --- Returns the current token index.
+    ---@return integer
+    function Parser:checkpoint()
+        return self.tokenIndex
+    end
+
+
+    --- Rollback to a previous checkpoint.
+    ---@param checkpoint integer
+    function Parser:rollback(checkpoint)
+        self.tokenIndex = checkpoint
     end
 end
 
@@ -147,8 +161,19 @@ do
     function Parser:tryStat()
         local position = self:peekPosition()
 
-        -- varlist '=' explist | functioncall
-        --!!! TODO
+        -- functioncall
+        local functionCall = self:tryFunctionCallExp()
+        if functionCall then
+            return Ast.FunctionCallStatNode:new({call = functionCall}, position)
+        end
+
+        -- varlist '=' explist
+        local varlist = self:tryVarList()
+        if varlist then
+            self:expect("=")
+            local explist = self:parseExpList()
+            return Ast.VariableAssignmentStatNode:new({variables = varlist, expressions = explist}, position)
+        end
 
         -- label
         if self:match("::") then
@@ -178,7 +203,7 @@ do
 
         -- while exp do block end
         if self:match("while") then
-            local condition = self:parseExpression()
+            local condition = self:parseExp()
             self:expect("do")
             local block = self:parseBlock()
             self:expect("end")
@@ -190,7 +215,7 @@ do
         if self:match("repeat") then
             local block = self:parseBlock()
             self:expect("until")
-            local condition = self:parseExpression()
+            local condition = self:parseExp()
 
             return Ast.RepeatStatNode:new({block = block, untilCondition = condition}, position)
         end
@@ -201,7 +226,7 @@ do
             local elseBlock = nil
 
             repeat
-                local condition = self:parseExpression()
+                local condition = self:parseExp()
                 self:expect("then")
                 local block = self:parseBlock()
 
@@ -225,13 +250,13 @@ do
             if self:match("=") then
                 --> NumericForStat
 
-                local startExpr = self:parseExpression()
+                local startExpr = self:parseExp()
                 self:expect(",")
-                local endExpr = self:parseExpression()
+                local endExpr = self:parseExp()
 
                 local stepExpr = nil
                 if self:match(",") then
-                    stepExpr = self:parseExpression()
+                    stepExpr = self:parseExp()
                 end
 
                 self:expect("do")
@@ -249,7 +274,7 @@ do
                 end
 
                 self:expect("in")
-                local explist = self:parseExpressionList()
+                local explist = self:parseExpList()
                 self:expect("do")
                 local block = self:parseBlock()
                 self:expect("end")
@@ -278,7 +303,7 @@ do
             local explist = {}
 
             if self:match("=") then
-                explist = self:parseExpressionList()
+                explist = self:parseExpList()
             end
 
             return Ast.LocalVariableAssignmentStatNode:new({names = namelist, expressions = explist}, position)
@@ -294,7 +319,7 @@ do
         local position = self:peekPosition()
 
         if self:match("return") then
-            local explist = self:parseExpressionList(true)
+            local explist = self:parseExpList(true)
             return Ast.ReturnStatNode:new({expressions = explist}, position)
         end
 
@@ -375,40 +400,131 @@ do
         ["~"] = true,
     }
 
+    function Parser:parseExp()
+        local expression = self:tryExp()
+        if not expression then
+            self:error(("unexpected symbol near '%s'"):format(self:current().value))
+        end
 
-    function Parser:parseExpression()
+        return expression
+    end
 
+    --- `exp ::= (LiteralExp) | functiondef | prefixexp | tableconstructor | exp binop exp | unop exp`
+    function Parser:tryExp()
+        local position = self:peekPosition()
+
+        -- LiteralExp
+        local literalExp = self:tryLiteralExp()
+        if literalExp then
+            return literalExp
+        end
+
+        -- functiondef
+        --!!! TODO
+
+        -- prefixexp
+        local prefixExp = self:tryPrefixExp()
+        if prefixExp then
+            return prefixExp
+        end
+
+        -- tableconstructor
+        local tableConstructor = self:tryTableConstructorExp()
+        if tableConstructor then
+            return tableConstructor
+        end
+
+        -- unop exp
+        local unaryOpExp = self:tryUnaryOpExp()
+        if unaryOpExp then
+            return unaryOpExp
+        end
+
+        -- exp binop exp
+        return self:parseBinaryOpExp()
     end
 
 
-    function Parser:tryUnaryOpExpression()
+    --- `explist ::= exp {',' exp}`
+    function Parser:parseExpList(allowEmpty)
+        local explist = {}
+
+        -- exp
+        local expression = self:tryExp()
+        table.insert(explist, expression)
+
+        -- [explist]?
+        if allowEmpty and not expression then
+            return {}
+        end
+
+        -- {',' exp}
+        while self:match(",") do
+            local expression = self:parseExp()
+            table.insert(explist, expression)
+        end
+
+        return explist
+    end
+
+
+    --- `exp binop exp`
+    function Parser:parseBinaryOpExp(minBindingPower)
+        minBindingPower = minBindingPower or 0
+
+        local left = self:tryExp()
+        if not left then return nil end
+
+        while true do
+            local position = self:peekPosition()
+            local token = self:peek()
+            local operator = token.value
+
+            local lbp, rbp = self:operatorBindingPower(token.value)
+            if lbp <= minBindingPower then
+                break
+            end
+
+            self:next()
+
+            local right = self:parseBinaryOpExp(rbp)
+
+            left = Ast.BinaryOpExpNode:new({left = left, operator = operator, right = right}, position)
+        end
+
+        return left
+    end
+
+
+    --- `unop exp`
+    function Parser:tryUnaryOpExp()
         local position = self:peekPosition()
         local token = self:peek()
         local isSpecialToken = token.type == TokenType.KEYWORD or token.type == TokenType.SYMBOL
         local isUnaryOp = isSpecialToken and unaryOperators[token.value]
-        
+
         if isUnaryOp then
             local operator = self:next().value
-            local expression = self:parseExpression()
-            return Ast.UnaryOpExpressionNode:new({operator = operator, expression = expression}, position)
+            local expression = self:parseExp()
+            return Ast.UnaryOpExpNode:new({operator = operator, expression = expression}, position)
         end
 
         return nil
     end
 
-
-    function Parser:tryLiteralExpression()
+    --- `nil | false | true | Numeral | LiteralString | '...'`
+    function Parser:tryLiteralExp()
         local position = self:peekPosition()
 
         -- nil
         if self:match("nil") then
-            return Ast.NilLiteralExpressionNode:new({value = nil}, position)
+            return Ast.NilLiteralExpNode:new({value = nil}, position)
         end
 
         -- true | false
         if self:match("true") or self:match("false") then
             local value = self:current().value == "true"
-            return Ast.BooleanLiteralExpressionNode:new({value = value}, position)
+            return Ast.BooleanLiteralExpNode:new({value = value}, position)
         end
 
         -- Numeral
@@ -423,10 +539,26 @@ do
             end
             number = self:assert(number, ("malformed number near '%s'"):format(value))
 
-            return Ast.NumberLiteralExpressionNode:new({value = number}, position)
+            return Ast.NumberLiteralExpNode:new({value = number}, position)
         end
 
         -- LiteralString
+        local literalString = self:tryLiteralString()
+        if literalString then
+            return literalString
+        end
+
+        -- ...
+        if self:match("...") then
+            return Ast.NameExpNode:new({name = "..."}, position)
+        end
+
+        return nil
+    end
+
+    --- LiteralString
+    function Parser:tryLiteralString()
+        local position = self:peekPosition()
         if self:match(TokenType.STRING_LITERAL) then
             local value = self:current().value
 
@@ -439,15 +571,207 @@ do
                 value = value:gsub("%]=-%]$", "")
             end
 
-            return Ast.StringLiteralExpressionNode:new({value = value}, position)
-        end
-
-        -- ...
-        if self:match("...") then
-            return Ast.VarargLiteralExpressionNode:new({value = {kind = "..."}}, position)
+            return Ast.StringLiteralExpNode:new({value = value}, position)
         end
 
         return nil
+    end
+
+
+    --- `prefixexp ::= var | functioncall | '(' exp ')'`
+    function Parser:tryPrefixExp()
+        -- '(' exp ')'
+        if self:match("(") then
+            local expression = self:parseExp()
+            self:expect(")")
+            return expression
+        end
+
+        -- functioncall
+        local functionCall = self:tryFunctionCallExp()
+        if functionCall then
+            return functionCall
+        end
+
+        -- var
+        return self:tryVarExp()
+    end
+
+
+    --- `var ::=  Name | prefixexp '[' exp ']' | prefixexp '.' Name`
+    function Parser:tryVarExp()
+        local position = self:peekPosition()
+
+        -- Name
+        if self:match(TokenType.NAME) then
+            local name = self:current().value
+            return Ast.NameExpNode:new({name = name}, position)
+        end
+
+        -- prefixexp '[' exp ']' | prefixexp '.' Name`
+        local prefixexp = self:tryPrefixExp()
+        if prefixexp then
+            -- prefixexp '[' exp ']'
+            if self:match("[") then
+                local key = self:parseExp()
+                self:expect("]")
+                return Ast.TableIndexExpNode:new({target = prefixexp, key = key}, position)
+            end
+
+            -- prefixexp '.' Name
+            if self:match(".") then
+                local position2 = self:peekPosition()
+                local key = self:expect(TokenType.NAME).value
+
+                local keyNode = Ast.StringLiteralExpNode:new({value = key}, position2)
+                return Ast.TableIndexExpNode:new({target = prefixexp, key = keyNode}, position)
+            end
+        end
+
+        return nil
+    end
+
+
+    --- `varlist ::= var {',' var}`
+    function Parser:tryVarList()
+        local var = self:tryVarExp()
+
+        if var then
+            local vars = {var}
+            while self:match(",") do
+                var = self:assert(self:tryVarExp())
+                table.insert(vars, var)
+            end
+
+            return vars
+        end
+
+        return nil
+    end
+
+
+    --- functioncall ::=  prefixexp args | prefixexp ':' Name args
+    function Parser:tryFunctionCallExp()
+        local position = self:peekPosition()
+        local prefixexp = self:tryPrefixExp()
+
+        if prefixexp then
+            -- prefixexp args
+            if self:match("(") then
+                local args = self:parseArgsExp()
+                return Ast.FunctionCallExpNode:new({target = prefixexp, args = args}, position)
+            end
+
+            -- prefixexp ':' Name args
+            if self:match(":") then
+                local method = self:expect(TokenType.NAME).value
+                local args = self:parseArgsExp()
+                return Ast.FunctionCallExpNode:new({target = prefixexp, method = method, args = args}, position)
+            end
+        end
+
+        return nil
+    end
+
+
+    --- args ::=  '(' [explist] ')' | tableconstructor | LiteralString
+    function Parser:parseArgsExp()
+        local position = self:peekPosition()
+
+        -- '(' [explist] ')'
+        if self:match("(") then
+            if self:match(")") then
+                return {}
+            end
+
+            local explist = self:parseExpList()
+            self:expect(")")
+            return explist
+        end
+
+        -- tableconstructor
+        local tableConstructor = self:tryTableConstructorExp()
+        if tableConstructor then
+            return {tableConstructor}
+        end
+
+        -- LiteralString
+        local literalString = self:tryLiteralString()
+        if literalString then
+            return {literalString}
+        end
+
+        return {}
+    end
+
+    --- tableconstructor ::= '{' [fieldlist] '}'
+    --- fieldlist ::= field {fieldsep field} [fieldsep]
+    --- field ::= '[' exp ']' '=' exp | Name '=' exp | exp
+    --- fieldsep ::= ',' | ';'
+    function Parser:tryTableConstructorExp()
+        local position = self:peekPosition()
+
+        -- '{' [fieldlist] '}'
+        if self:match("{") then
+            -- [fieldlist] is omitted
+            if self:match("}") then
+                return Ast.TableConstructorExpNode:new({fields = {}}, position)
+            end
+
+            -- fieldlist ::= field {fieldsep field} [fieldsep]
+            local fields = {}
+
+            -- field
+            local field, listCount = self:parseFieldExp(1)
+            table.insert(fields, field)
+
+            -- {fieldsep field} [fieldsep]
+            while self:match(",", ";") do
+                if self:peek().value == "}" then
+                    break
+                end
+                field, listCount = self:parseFieldExp(listCount)
+            end
+
+            -- '}'
+            self:expect("}")
+
+            return Ast.TableConstructorExpNode:new({fields = fields}, position)
+        end
+
+        return nil
+    end
+
+
+    --- field ::= '[' exp ']' '=' exp | Name '=' exp | exp
+    ---@param listCount integer
+    ---@return {key: ExpNode?, value: ExpNode}, integer
+    function Parser:parseFieldExp(listCount)
+        local position = self:peekPosition()
+
+        -- '[' exp ']' '=' exp
+        if self:match("[") then
+            local key = self:parseExp()
+            self:expect("]")
+            self:expect("=")
+            local value = self:parseExp()
+
+            return {key = key, value = value}, listCount
+        end
+
+        -- Name '=' exp
+        if self:match(TokenType.NAME) then
+            local key = Ast.StringLiteralExpNode:new({value = self:current().value}, position)
+            self:expect("=")
+            local value = self:parseExp()
+
+            return {key = key, value = value}, listCount
+        end
+
+        -- exp
+        local value = self:parseExp()
+        local key = Ast.NumberLiteralExpNode:new({value = listCount}, position)
+        return {key = key, value = value}, listCount + 1
     end
 
 

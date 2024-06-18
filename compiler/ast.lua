@@ -24,20 +24,20 @@ local Ast = {}
 ---| "GotoStatNode"
 
 ---@alias NODETYPE_LITERAL
----| "NumberLiteralExpressionNode"
----| "StringLiteralExpressionNode"
----| "NilLiteralExpressionNode"
----| "BooleanLiteralExpressionNode"
----| "VarargLiteralExpressionNode"
+---| "NumberLiteralExpNode"
+---| "StringLiteralExpNode"
+---| "NilLiteralExpNode"
+---| "BooleanLiteralExpNode"
 
 ---@alias NODETYPE_EXPR
 ---| NODETYPE_LITERAL
----| "TableConstructorExpressionNode"
----| "FunctionCallExpressionNode"
----| "OpExpressionNode"
----| "BinaryOpExpressionNode"
----| "UnaryOpExpressionNode"
----| "NameExpressionNode"
+---| "TableConstructorExpNode"
+---| "FunctionCallExpNode"
+---| "OpExpNode"
+---| "BinaryOpExpNode"
+---| "UnaryOpExpNode"
+---| "NameExpNode"
+---| "TableIndexExpNode"
 
 do
     ---@class Node
@@ -117,7 +117,7 @@ Ast.StatNode = Ast.Node:extend("UnknownNode")
 Ast.DoStatNode = Ast.StatNode:extend("DoStatNode")
 
 ---@class _AtomicIf
----@field condition ExpressionNode
+---@field condition ExpNode
 ---@field block StatNode[]
 
 ---@class IfStatNode : StatNode
@@ -128,30 +128,30 @@ Ast.IfStatNode = Ast.StatNode:extend("IfStatNode")
 
 ---@class WhileStatNode : StatNode
 ---@field type "WhileStatNode"
----@field condition ExpressionNode
+---@field condition ExpNode
 ---@field block StatNode[]
 Ast.WhileStatNode = Ast.StatNode:extend("WhileStatNode")
 
 ---@class IterativeForStatNode : StatNode
 ---@field type "IterativeForStatNode"
 ---@field names string[]
----@field expressions ExpressionNode[]
+---@field expressions ExpNode[]
 ---@field block StatNode[]
 Ast.IterativeForStatNode = Ast.StatNode:extend("IterativeForStatNode")
 
 ---@class NumericForStatNode : StatNode
 ---@field type "NumericForStatNode"
 ---@field name string
----@field startExpr ExpressionNode
----@field endExpr ExpressionNode
----@field stepExpr ExpressionNode?
+---@field startExpr ExpNode
+---@field endExpr ExpNode
+---@field stepExpr ExpNode?
 ---@field block StatNode[]
 Ast.NumericForStatNode = Ast.StatNode:extend("NumericForStatNode")
 
 ---@class RepeatStatNode : StatNode
 ---@field type "RepeatStatNode"
 ---@field block StatNode[]
----@field untilCondition ExpressionNode
+---@field untilCondition ExpNode
 Ast.RepeatStatNode = Ast.StatNode:extend("RepeatStatNode")
 
 ---@class FunctionDeclarationStatNode : StatNode
@@ -168,7 +168,7 @@ Ast.LocalFunctionDeclarationStatNode = Ast.FunctionDeclarationStatNode:extend("L
 ---@class VariableAssignmentStatNode : StatNode
 ---@field type "VariableAssignmentStatNode"
 ---@field names string[]
----@field expressions ExpressionNode[]
+---@field expressions ExpNode[]
 Ast.VariableAssignmentStatNode = Ast.StatNode:extend("VariableAssignmentStatNode")
 
 ---@class LocalVariableDeclarationStatNode : VariableAssignmentStatNode
@@ -177,7 +177,7 @@ Ast.LocalVariableAssignmentStatNode = Ast.VariableAssignmentStatNode:extend("Loc
 
 ---@class ReturnStatNode : StatNode
 ---@field type "ReturnStatNode"
----@field expressions ExpressionNode[]
+---@field expressions ExpNode[]
 Ast.ReturnStatNode = Ast.StatNode:extend("ReturnStatNode")
 
 ---@class BreakStatNode : StatNode
@@ -186,7 +186,7 @@ Ast.BreakStatNode = Ast.StatNode:extend("BreakStatNode")
 
 ---@class FunctionCallStatNode : StatNode
 ---@field type "FunctionCallStatNode"
----@field expression FunctionCallExpressionNode
+---@field expression FunctionCallExpNode
 Ast.FunctionCallStatNode = Ast.StatNode:extend("FunctionCallStatNode")
 
 ---@class GotoLabelStatNode : StatNode
@@ -200,60 +200,62 @@ Ast.GotoLabelStatNode = Ast.StatNode:extend("GotoLabelStatNode")
 Ast.GotoStatNode = Ast.StatNode:extend("GotoStatNode")
 
 
----@class ExpressionNode : Node
-Ast.ExpressionNode = Ast.Node:extend("UnknownNode")
+---@class ExpNode : Node
+Ast.ExpNode = Ast.Node:extend("UnknownNode")
 
----@class LiteralExpressionNode : ExpressionNode
+---@class LiteralExpNode : ExpNode
 ---@field value any
-Ast.LiteralExpressionNode = Ast.ExpressionNode:extend("UnknownNode")
+Ast.LiteralExpNode = Ast.ExpNode:extend("UnknownNode")
 
----@class NumberLiteralExpressionNode : LiteralExpressionNode
+---@class NumberLiteralExpNode : LiteralExpNode
 ---@field value number
-Ast.NumberLiteralExpressionNode = Ast.LiteralExpressionNode:extend("NumberLiteralExpressionNode")
+Ast.NumberLiteralExpNode = Ast.LiteralExpNode:extend("NumberLiteralExpNode")
 
----@class StringLiteralExpressionNode : LiteralExpressionNode
+---@class StringLiteralExpNode : LiteralExpNode
 ---@field value string
-Ast.StringLiteralExpressionNode = Ast.LiteralExpressionNode:extend("StringLiteralExpressionNode")
+Ast.StringLiteralExpNode = Ast.LiteralExpNode:extend("StringLiteralExpNode")
 
----@class NilLiteralExpressionNode : LiteralExpressionNode
+---@class NilLiteralExpNode : LiteralExpNode
 ---@field value nil
-Ast.NilLiteralExpressionNode = Ast.LiteralExpressionNode:extend("NilLiteralExpressionNode")
+Ast.NilLiteralExpNode = Ast.LiteralExpNode:extend("NilLiteralExpNode")
 
----@class BooleanLiteralExpressionNode : LiteralExpressionNode
+---@class BooleanLiteralExpNode : LiteralExpNode
 ---@field value boolean
-Ast.BooleanLiteralExpressionNode = Ast.LiteralExpressionNode:extend("BooleanLiteralExpressionNode")
-
----@class VarargLiteralExpressionNode : LiteralExpressionNode
----@field value { kind: "..." }
-Ast.VarargLiteralExpressionNode = Ast.LiteralExpressionNode:extend("VarargLiteralExpressionNode")
+Ast.BooleanLiteralExpNode = Ast.LiteralExpNode:extend("BooleanLiteralExpNode")
 
 ---@class _TableNode
----@field key ExpressionNode
----@field value ExpressionNode
+---@field key ExpNode
+---@field value ExpNode
 
----@class TableConstructorExpressionNode : ExpressionNode
+---@class TableConstructorExpNode : ExpNode
 ---@field fields _TableNode[]
-Ast.TableConstructorExpressionNode = Ast.ExpressionNode:extend("TableConstructorExpressionNode")
+Ast.TableConstructorExpNode = Ast.ExpNode:extend("TableConstructorExpNode")
 
----@class FunctionCallExpressionNode : ExpressionNode
----@field target ExpressionNode
+---@class FunctionCallExpNode : ExpNode
+---@field target ExpNode
 ---@field method string?
----@field args ExpressionNode[]
-Ast.FunctionCallExpressionNode = Ast.ExpressionNode:extend("FunctionCallExpressionNode")
+---@field args ExpNode[]
+Ast.FunctionCallExpNode = Ast.ExpNode:extend("FunctionCallExpNode")
 
----@class BinaryOpExpressionNode : ExpressionNode
+---@class BinaryOpExpNode : ExpNode
 ---@field operator string
----@field left ExpressionNode
----@field right ExpressionNode
-Ast.BinaryOpExpressionNode = Ast.ExpressionNode:extend("BinaryOpExpressionNode")
+---@field left ExpNode
+---@field right ExpNode
+Ast.BinaryOpExpNode = Ast.ExpNode:extend("BinaryOpExpNode")
 
----@class UnaryOpExpressionNode : ExpressionNode
+---@class UnaryOpExpNode : ExpNode
 ---@field operator string
----@field expression ExpressionNode
-Ast.UnaryOpExpressionNode = Ast.ExpressionNode:extend("UnaryOpExpressionNode")
+---@field expression ExpNode
+Ast.UnaryOpExpNode = Ast.ExpNode:extend("UnaryOpExpNode")
 
----@class NameExpressionNode : ExpressionNode
+---@class NameExpNode : ExpNode
 ---@field name string | "..."
-Ast.NameExpressionNode = Ast.ExpressionNode:extend("NameExpressionNode")
+Ast.NameExpNode = Ast.ExpNode:extend("NameExpNode")
+
+---@class TableIndexExpNode : ExpNode
+---@field target ExpNode
+---@field key ExpNode
+Ast.TableIndexExpNode= Ast.ExpNode:extend("TableIndexExpNode")
+
 
 return Ast
