@@ -1,5 +1,5 @@
-# Mua - Mostly Sweet Lua
+# Mua - Mellow Lua
 
-Mua is a sweet and type-safe dialect to Lua. It is compiled to native Lua 5.1.
+Mua is a sweet, type-safe dialect to Lua. It's transpiled to native Lua 5.1.
 
-Currently working in process!
+`-- Working in progress`
