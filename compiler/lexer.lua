@@ -128,7 +128,7 @@ end
 
 ---@param message string
 function Lexer:error(message)
-    error(("%d:%d: Lexer error: %s"):format(self.line, self.column, message))
+    error(("%s:%d:%d: Lexer error: %s"):format(self.filename, self.line, self.column, message))
 end
 
 
@@ -148,9 +148,7 @@ function Lexer:lex()
         local char = self:peek()
 
         if char == "\n" then
-            self.line = self.line + 1
-            self.column = 1
-            -- self:pop()
+            self:newline()
         end
 
         if char:match("%s") then
@@ -175,11 +173,18 @@ function Lexer:lex()
         else
             self:lexText()
         end
+
     end
 
     self:insertEof()
 
     return self.tokens
+end
+
+
+function Lexer:newline()
+    self.line = self.line + 1
+    self.column = 1
 end
 
 
@@ -245,14 +250,18 @@ end
 function Lexer:lexText()
     self:startToken(TokenType.NAME)
 
+    local isFirst = true
     repeat
         local char = self:peek()
 
-        if SymbolFirstChars[char] or char:match("[%s~`!@#$%%^&*\\]") then
+        if SymbolFirstChars[char] or char:match("[%s~`!@#$%%^&*\\\"\']") then
+            self:assertf(not isFirst, "unexpected symbol %s", char)
             break
         else
             self:pop()
         end
+
+        isFirst = false
     until self:isEof()
 
     local value = self:getTokenValue()
@@ -315,12 +324,13 @@ function Lexer:lexString()
                 break
             end
 
-            if char == "\n" then
-                self:error("unterminated string")
-            end
         end
 
-        if char == "\\" then
+        if char == "\n" then
+            self:newline()
+        end
+
+        if char == "\\" and not isLongString then
             self:pop()
         end
 

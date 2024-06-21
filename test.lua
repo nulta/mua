@@ -62,7 +62,7 @@ print("")
 do
     local counts = 0
 
-    local function testParser(code)
+    local function testParser(code, filename)
         counts = counts + 1
         print("")
         print("")
@@ -71,14 +71,14 @@ do
             print("  " .. code)
         end
 
-        local tokens = Lexer.new(code):lex()
+        local tokens = Lexer.new(code, filename):lex()
 
         print("[Tokens]")
         for _, token in ipairs(tokens) do
             print(token.bytes, token.line .. ":" .. token.column, token.type, token.value)
         end
 
-        local ast = Parser.new(tokens):parse()
+        local ast = Parser.new(tokens, filename):parse()
 
         local function printAst(ast, key, ident)
             if key == "position" then return end
@@ -157,10 +157,22 @@ do
     testParser("hello_world()")
     testParser("hello_world(self, create_world())")
 
-    testParser([[
+    testParser([==[
+debug = require "debug"
+
+assert(x == 'a\0a' and string.len(x) == 3)
+
+assert('\n\"\'\\' == [[
+
+"'\]])
+    ]==])
+
+    testParser([=[
 local function exceptError(code)
 counts = counts + 1
-print("")
+print("")  --[[this is blockwide
+  commen
+ts]]--
 print("")
 print("[ Test #" .. counts .. " ]")
 if not code:find("\n") then
@@ -175,5 +187,7 @@ else
     error("Excepted error, but the code was executed with no error")
 end
 end
-    ]])
+    ]=])
+
+    -- testParser(io.open("docs/testsuite_literals.lua"):read("*a"), "docs/testsuite_literals.lua")
 end

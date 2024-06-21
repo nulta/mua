@@ -1,0 +1,337 @@
+[Tokens]
+1       1:1     KEYWORD local
+7       1:7     KEYWORD function
+16      1:16    NAME    exceptError
+27      1:27    SYMBOL  (
+28      1:28    NAME    code
+32      1:32    SYMBOL  )
+34      2:2     NAME    counts
+41      2:9     SYMBOL  =
+43      2:11    NAME    counts
+50      2:18    SYMBOL  +
+52      2:20    NUMBER_LITERAL  1
+54      3:2     NAME    print
+59      3:7     SYMBOL  (
+60      3:8     STRING_LITERAL  ""
+62      3:10    SYMBOL  )
+64      4:2     NAME    print
+69      4:7     SYMBOL  (
+70      4:8     STRING_LITERAL  ""
+72      4:10    SYMBOL  )
+74      5:2     NAME    print
+79      5:7     SYMBOL  (
+80      5:8     STRING_LITERAL  "[ Test #"
+91      5:19    SYMBOL  ..
+94      5:22    NAME    counts
+101     5:29    SYMBOL  ..
+104     5:32    STRING_LITERAL  " ]"
+108     5:36    SYMBOL  )
+110     6:2     KEYWORD if
+113     6:5     KEYWORD not
+117     6:9     NAME    code
+121     6:13    SYMBOL  :
+122     6:14    NAME    find
+126     6:18    SYMBOL  (
+127     6:19    STRING_LITERAL  "\n"
+131     6:23    SYMBOL  )
+133     6:25    KEYWORD then
+142     7:6     NAME    print
+147     7:11    SYMBOL  (
+148     7:12    STRING_LITERAL  "> "
+153     7:17    SYMBOL  ..
+156     7:20    NAME    code
+160     7:24    SYMBOL  )
+162     8:2     KEYWORD end
+166     9:2     KEYWORD local
+172     9:8     NAME    tokens
+179     9:15    SYMBOL  =
+181     9:17    NAME    Lexer
+186     9:22    SYMBOL  .
+187     9:23    NAME    new
+190     9:26    SYMBOL  (
+191     9:27    NAME    code
+195     9:31    SYMBOL  )
+196     9:32    SYMBOL  :
+197     9:33    NAME    lex
+200     9:36    SYMBOL  (
+201     9:37    SYMBOL  )
+203     10:2    KEYWORD local
+209     10:8    NAME    ok
+211     10:10   SYMBOL  ,
+213     10:12   NAME    err
+217     10:16   SYMBOL  =
+219     10:18   NAME    pcall
+224     10:23   SYMBOL  (
+225     10:24   KEYWORD function
+233     10:32   SYMBOL  (
+234     10:33   SYMBOL  )
+236     10:35   NAME    Parser
+242     10:41   SYMBOL  .
+243     10:42   NAME    new
+246     10:45   SYMBOL  (
+247     10:46   NAME    tokens
+253     10:52   SYMBOL  )
+254     10:53   SYMBOL  :
+255     10:54   NAME    parse
+260     10:59   SYMBOL  (
+261     10:60   SYMBOL  )
+263     10:62   KEYWORD end
+266     10:65   SYMBOL  )
+268     11:2    KEYWORD if
+271     11:5    KEYWORD not
+275     11:9    NAME    ok
+278     11:12   KEYWORD then
+287     12:6    NAME    print
+292     12:11   SYMBOL  (
+293     12:12   STRING_LITERAL  "Caught excepted error"
+316     12:35   SYMBOL  )
+322     13:6    NAME    print
+327     13:11   SYMBOL  (
+328     13:12   NAME    err
+331     13:15   SYMBOL  )
+333     14:2    KEYWORD else
+342     15:6    NAME    error
+347     15:11   SYMBOL  (
+348     15:12   STRING_LITERAL  "Excepted error, but the code was executed with no error"
+405     15:69   SYMBOL  )
+407     16:2    KEYWORD end
+411     17:2    KEYWORD end
+419     18:6    EOF
+
+
+AST: {
+    LocalFunctionDeclarationStatNode {
+        name: "exceptError"
+        block: {
+            VariableAssignmentStatNode {
+                variables: {
+                    NameExpNode {
+                        name: "counts"
+                    }
+                }
+                expressions: {
+                    BinaryOpExpNode {
+                        L: NameExpNode {
+                            name: "counts"
+                        }
+                        O: "+"
+                        R: NumberLiteralExpNode {
+                            value: 1
+                        }
+                    }
+                }
+            }
+            FunctionCallStatNode {
+                call: FunctionCallExpNode {
+                    target: NameExpNode {
+                        name: "print"
+                    }
+                    args: {
+                        StringLiteralExpNode {
+                            value: ""
+                        }
+                    }
+                }
+            }
+            FunctionCallStatNode {
+                call: FunctionCallExpNode {
+                    target: NameExpNode {
+                        name: "print"
+                    }
+                    args: {
+                        StringLiteralExpNode {
+                            value: ""
+                        }
+                    }
+                }
+            }
+            FunctionCallStatNode {
+                call: FunctionCallExpNode {
+                    target: NameExpNode {
+                        name: "print"
+                    }
+                    args: {
+                        BinaryOpExpNode {
+                            L: StringLiteralExpNode {
+                                value: "[ Test #"
+                            }
+                            O: ".."
+                            R: BinaryOpExpNode {
+                                L: NameExpNode {
+                                    name: "counts"
+                                }
+                                O: ".."
+                                R: StringLiteralExpNode {
+                                    value: " ]"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            IfStatNode {
+                ifNodes: {
+                    {
+                        block: {
+                            FunctionCallStatNode {
+                                call: FunctionCallExpNode {
+                                    target: NameExpNode {
+                                        name: "print"
+                                    }
+                                    args: {
+                                        BinaryOpExpNode {
+                                            L: StringLiteralExpNode {       
+                                                value: "> "
+                                            }
+                                            O: ".."
+                                            R: NameExpNode {
+                                                name: "code"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        condition: UnaryOpExpNode {
+                            O: "not"
+                            expression: FunctionCallExpNode {
+                                target: NameExpNode {
+                                    name: "code"
+                                }
+                                args: {
+                                    StringLiteralExpNode {
+                                        value: "\n"
+                                    }
+                                }
+                                method: "find"
+                            }
+                        }
+                    }
+                }
+            }
+            LocalVariableAssignmentStatNode {
+                expressions: {
+                    FunctionCallExpNode {
+                        target: FunctionCallExpNode {
+                            target: TableIndexExpNode {
+                                target: NameExpNode {
+                                    name: "Lexer"
+                                }
+                                key: StringLiteralExpNode {
+                                    value: "new"
+                                }
+                            }
+                            args: {
+                                NameExpNode {
+                                    name: "code"
+                                }
+                            }
+                        }
+                        args: {}
+                        method: "lex"
+                    }
+                }
+                names: {
+                    "tokens"
+                }
+            }
+            LocalVariableAssignmentStatNode {
+                expressions: {
+                    FunctionCallExpNode {
+                        target: NameExpNode {
+                            name: "pcall"
+                        }
+                        args: {
+                            FunctionDefExpNode {
+                                block: {
+                                    FunctionCallStatNode {
+                                        call: FunctionCallExpNode {
+                                            target: FunctionCallExpNode {   
+                                                target: TableIndexExpNode { 
+                                                    target: NameExpNode {   
+                                                        name: "Parser"      
+                                                    }
+                                                    key: StringLiteralExpNode {
+                                                        value: "new"        
+                                                    }
+                                                }
+                                                args: {
+                                                    NameExpNode {
+                                                        name: "tokens"      
+                                                    }
+                                                }
+                                            }
+                                            args: {}
+                                            method: "parse"
+                                        }
+                                    }
+                                }
+                                parameters: {}
+                            }
+                        }
+                    }
+                }
+                names: {
+                    "ok"
+                    "err"
+                }
+            }
+            IfStatNode {
+                elseBlock: {
+                    FunctionCallStatNode {
+                        call: FunctionCallExpNode {
+                            target: NameExpNode {
+                                name: "error"
+                            }
+                            args: {
+                                StringLiteralExpNode {
+                                    value: "Excepted error, but the code was executed with no error"
+                                }
+                            }
+                        }
+                    }
+                }
+                ifNodes: {
+                    {
+                        block: {
+                            FunctionCallStatNode {
+                                call: FunctionCallExpNode {
+                                    target: NameExpNode {
+                                        name: "print"
+                                    }
+                                    args: {
+                                        StringLiteralExpNode {
+                                            value: "Caught excepted error"  
+                                        }
+                                    }
+                                }
+                            }
+                            FunctionCallStatNode {
+                                call: FunctionCallExpNode {
+                                    target: NameExpNode {
+                                        name: "print"
+                                    }
+                                    args: {
+                                        NameExpNode {
+                                            name: "err"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        condition: UnaryOpExpNode {
+                            O: "not"
+                            expression: NameExpNode {
+                                name: "ok"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        parameters: {
+            "code"
+        }
+    }
+    filename: "[?]"
+}

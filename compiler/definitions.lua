@@ -77,14 +77,6 @@ Defs.LuaSymbols = {
 }
 
 Defs.MuaSymbols = {
-    ["??"] = true,
-    ["?."] = true,
-    ["?["] = true,
-    ["?:"] = true,
-    ["@"] = true,
-    ["`"] = true,
-    ["|"] = true,
-    ["!"] = true,
 }
 
 Defs.Symbols = {}
