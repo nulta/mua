@@ -169,7 +169,11 @@ do
         -- functioncall
         local functionCall = self:tryFunctionCallExp()
         if functionCall then
-            return Ast.FunctionCallStatNode:new({call = functionCall}, position)
+            return Ast.FunctionCallStatNode:new({
+                target = functionCall.target,
+                method = functionCall.method,
+                args = functionCall.args
+            }, position)
         end
 
         -- varlist '=' explist

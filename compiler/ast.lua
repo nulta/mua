@@ -185,9 +185,12 @@ Ast.ReturnStatNode = Ast.StatNode:extend("ReturnStatNode")
 ---@field type "BreakStatNode"
 Ast.BreakStatNode = Ast.StatNode:extend("BreakStatNode")
 
+-- same signature with FunctionCallExpNode
 ---@class FunctionCallStatNode : StatNode
 ---@field type "FunctionCallStatNode"
----@field expression FunctionCallExpNode
+---@field target ExpNode
+---@field method string?
+---@field args ExpNode[]
 Ast.FunctionCallStatNode = Ast.StatNode:extend("FunctionCallStatNode")
 
 ---@class GotoLabelStatNode : StatNode
