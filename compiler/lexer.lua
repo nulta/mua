@@ -314,6 +314,7 @@ function Lexer:lexString()
     while true do
         local char = self:pop()
 
+        -- Check for end of string
         if isLongString then
             if char == "]" and self:peek(0, #delimiter) == delimiter then
                 self:pop(#delimiter - 1)
@@ -323,15 +324,30 @@ function Lexer:lexString()
             if char == delimiter then
                 break
             end
-
         end
 
+        -- Check for newline
         if char == "\n" then
+            self:assertf(isLongString, "unfinished string")
             self:newline()
         end
 
+        -- Check for escape sequences
         if char == "\\" and not isLongString then
-            self:pop()
+            local next = self:pop()
+
+            if next == "\n" then
+                self:newline()
+            end
+
+            if next == "z" then
+                -- \z skips the following whitespace including newlines
+                repeat
+                    if self:pop() == "\n" then
+                        self:newline()
+                    end
+                until not self:peek():match("[ \t\n]")
+            end
         end
 
         if self:isEof() then

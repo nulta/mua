@@ -181,7 +181,7 @@ do
         if varlist then
             self:expect("=")
             local explist = self:parseExpList()
-            return Ast.VariableAssignmentStatNode:new({variables = varlist, expressions = explist}, position)
+            return Ast.VariableAssignmentStatNode:new({names = varlist, expressions = explist}, position)
         end
 
         -- label
@@ -521,15 +521,90 @@ do
         local position = self:peekPosition()
         if self:match(TokenType.STRING_LITERAL) then
             local value = self:current().value
+            local isLongString = false
 
+            -- Remove quotes
             if value:match("^['\"]") then
                 -- "Short string"
                 value = value:sub(2, -2)
             else
                 -- [[Long string]]
+                isLongString = true
                 value = value:gsub("^%[=-%[\n?", "")
                 value = value:gsub("%]=-%]$", "")
             end
+
+            -- Long string does not process escape sequences
+            if isLongString then
+                return Ast.StringLiteralExpNode:new({value = value}, position)
+            end
+
+            -- Escape sequences processing
+            local text = {}
+            local j = 1
+            local i = 1
+            while i <= #value do
+                local c = value:sub(i, i)
+                i = i + 1
+                if c ~= "\\" then goto CONTINUE end
+
+                -- Prepend the previous string
+                table.insert(text, value:sub(j, i - 2))
+
+                local next = value:sub(i, i)
+                local switches = {
+                    ["a"] = "\a",
+                    ["b"] = "\b",
+                    ["f"] = "\f",
+                    ["n"] = "\n",
+                    ["r"] = "\r",
+                    ["t"] = "\t",
+                    ["v"] = "\v",
+                    ['"'] = '"',
+                    ["'"] = "'",
+                    ["\n"] = "\n",
+                    ["\\"] = "\\",
+                }
+
+                if switches[next] then
+                    table.insert(text, switches[next])
+                    i = i + 1
+                elseif next == "x" then
+                    -- \xHH
+                    local hex = value:match("^%x%x", i+1)
+                    self:assert(hex, "hexadecimal digit expected")
+                    table.insert(text, string.char(tonumber(hex, 16)))
+                    i = i + 3
+                elseif next:match("%d") then
+                    -- \ddd
+                    local num = value:match("^%d%d?%d?", i)
+                    table.insert(text, string.char(tonumber(num, 10)))
+                    i = i + #num
+                elseif next == "u" then
+                    -- \u{HHH...}
+                    local hex = value:match("^{%x+}", i+1)
+                    self:assert(hex, "hexadecimal digit expected")
+
+                    local hexNum = tonumber(hex:sub(2, -2), 16)
+                    self:assert(hexNum <= 0x10FFFF, "UTF-8 value too large")
+
+                    table.insert(text, utf8.char(hexNum))
+                    i = i + #hex
+                elseif next == "z" then
+                    -- \z (skip whitespace)
+                    while value:sub(i, i):match("%s") do
+                        i = i + 1
+                    end
+                else
+                    self:error(("invalid escape sequence near '\\%s'"):format(next))
+                end
+
+                j = i
+                ::CONTINUE::
+            end
+
+            table.insert(text, value:sub(j, i - 1))
+            value = table.concat(text)
 
             return Ast.StringLiteralExpNode:new({value = value}, position)
         end
