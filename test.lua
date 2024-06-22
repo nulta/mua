@@ -1,14 +1,27 @@
+local VERBOSE = false
+
 
 print("")
 print("=== Test: compiler.lexer ===")
-print("")
 local Lexer = require("compiler.lexer")
-if false then
+do
+    local counts = 0
     local function testLexer(code)
+        counts = counts + 1
         print("")
+        print("[ Test #" .. counts .. " ]")
+
         local tokens = Lexer.new(code):lex()
-        for _, token in ipairs(tokens) do
-            print(token.bytes, token.line .. ":" .. token.column, token.type, token.value)
+
+        if VERBOSE then
+            for _, token in ipairs(tokens) do
+                print(token.bytes, token.line .. ":" .. token.column, token.type, token.value)
+            end
+        else
+            if not code:find("\n") then
+                print("  " .. code)
+            end
+            print("> " .. #tokens .. " tokens")
         end
     end
 
@@ -69,13 +82,17 @@ do
         print("[ Test #" .. counts .. " ]")
         if not code:find("\n") then
             print("  " .. code)
+        elseif filename then
+            print(": " .. filename)
         end
 
         local tokens = Lexer.new(code, filename):lex()
 
-        print("[Tokens]")
-        for _, token in ipairs(tokens) do
-            print(token.bytes, token.line .. ":" .. token.column, token.type, token.value)
+        if VERBOSE then
+            print("[Tokens]")
+            for _, token in ipairs(tokens) do
+                print(token.bytes, token.line .. ":" .. token.column, token.type, token.value)
+            end
         end
 
         local ast = Parser.new(tokens, filename):parse()
@@ -118,7 +135,9 @@ do
             end
         end
 
-        printAst(ast, "AST")
+        if VERBOSE then
+            printAst(ast, "AST")
+        end
     end
 
     local function exceptError(code)
@@ -212,5 +231,145 @@ end
         }
     ]=])
 
-    -- testParser(io.open("docs/testsuite_literals.lua"):read("*a"), "docs/testsuite_literals.lua")
+    testParser(io.open("docs/testsuite_literals.lua"):read("*a"), "docs/testsuite_literals.lua")
+end
+
+
+print("")
+print("=== Test: compiler.retranslator ===")
+print("")
+do
+    local Retrans = require("compiler.retranslator")
+
+    local counts = 0
+
+    local function newTest(code)
+        counts = counts + 1
+        print("")
+        print("")
+        print("[ Test #" .. counts .. " ]")
+        if not code:find("\n") then
+            print("  " .. code)
+        end
+    end
+
+    local function retranslate(code)
+        local tokens = Lexer.new(code):lex()
+        local ast = Parser.new(tokens):parse()
+        local retrans = Retrans:retranslate(ast)
+        return retrans
+    end
+
+    local function testRetrans(code, filename)
+        newTest(code)
+
+        -- equality test on repeated retranslation
+        local retransed = retranslate(code)
+        print("\n[Retrans]")
+        print("  " .. retransed)
+
+        assert(retranslate(retransed) == retransed, "retrans(retrans) should be equal with the retrans: " .. retranslate(retransed))
+
+        -- return value equality test with the original code
+        local originalFunc, failOriginal = load(code)
+        local retransFunc, failRetrans = load(retranslate(code))
+
+        if originalFunc then
+            assert(retransFunc, "load(retranslate) should not error: " .. (failRetrans or "?"))
+
+            local okO, originalVal = pcall(originalFunc)
+            local okR, retransVal = pcall(retransFunc)
+            assert(okO == okR, "Original function and retranslated function should return equal status: " .. tostring(okO) .. " ~= " .. tostring(okR))
+
+            if not okO then
+                -- remove original string from error message
+                originalVal = originalVal:gsub("%[string \".+\"%]:%d+:", "[string]")
+                retransVal = retransVal:gsub("%[string \".+\"%]:%d+:", "[string]")
+            end
+
+            assert(originalVal == retransVal, "Original function and retranslated function should return equal value: " .. tostring(originalVal) .. " ~= " .. tostring(retransVal))
+            print("\n[Return]\n  " .. tostring(retransVal))
+        else
+            assert(failOriginal == failRetrans, "load(retranslate) error should be equal with errOriginal: " .. tostring(failOriginal) .. " ~= " .. tostring(failRetrans))
+        end
+    end
+
+
+    testRetrans("do do end end")
+    testRetrans("return 1 + 1")
+    testRetrans("return 1+2*3")
+    testRetrans("return 1+2*3/4+5-6+7^8^9")
+    testRetrans([[a = "hello" .. "world"]])
+    testRetrans([===[a = "hello" .. [[hello]] .. [=[world]=] ]===])
+    testRetrans("a, bb, ccc = aaa, 123, 'qwer'")
+    testRetrans("hello_world(1,2,3,10+20*30)")
+    testRetrans("hello_world()")
+    testRetrans("return math.sin(1)")
+    testRetrans("hello_world(self, create_world())")
+
+
+    testRetrans([==[
+debug = require "debug"
+
+assert(x == 'a\0a' and string.len(x) == 3)
+
+assert('\n\"\'\\' == [[
+
+"'\]])
+    ]==])
+
+    testRetrans([[if code() then print("> " .. code) end]])
+
+    testRetrans([=[
+local function exceptError(code)
+counts = counts + 1
+print("")  --[[this is blockwide
+  commen
+ts]]--
+print("")
+print("[ Test #" .. counts .. " ]")
+if not code:find("\n") then
+    print("> " .. code)
+end
+local tokens = Lexer.new(code):lex()
+local ok, err = pcall(function() Parser.new(tokens):parse() end)
+if not ok then
+    print("Caught excepted error")
+    print(err)
+else
+    error("Excepted error, but the code was executed with no error")
+end
+end
+
+return true
+    ]=])
+
+    testRetrans([=[
+        local bindingPower = {
+            ["^"]  = {121, 120}, -- #1 (left associative)
+            ["*"]  = {110}, -- #2
+            ["/"]  = {110},
+            ["//"] = {110},
+            ["%"]  = {110},
+            ["+"]  = {100},
+            ["-"]  = {100},
+            [".."] = {91, 90}, -- #3 (left associative)
+            ["<<"] = {80}, -- #4
+            [">>"] = {80},
+            ["<"]  = {70}, -- #5
+            [">"]  = {70},
+            ["<="] = {70},
+            [">="] = {70},
+            ["=="] = {60}, -- #6
+            ["~="] = {60},
+            ["and"] = {30}, -- #7
+            ["or"] = {20}, -- #8
+        }
+
+        local t = {}
+        for k, v in pairs(bindingPower) do
+            table.insert(t, k .. table.concat(v, ";"))
+        end
+        return table.concat(t, "//")
+    ]=])
 end
