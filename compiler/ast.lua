@@ -33,7 +33,6 @@ local Ast = {}
 ---| NODETYPE_LITERAL
 ---| "TableConstructorExpNode"
 ---| "FunctionCallExpNode"
----| "OpExpNode"
 ---| "BinaryOpExpNode"
 ---| "UnaryOpExpNode"
 ---| "NameExpNode"
