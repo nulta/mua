@@ -1,3 +1,5 @@
+---@diagnostic disable
+
 -- $Id: literals.lua,v 1.36 2016/11/07 13:11:28 roberto Exp $
 -- See Copyright Notice in file all.lua
 
