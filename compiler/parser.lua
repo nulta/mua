@@ -813,6 +813,7 @@ do
                     break
                 end
                 field, listCount = self:parseFieldExp(listCount)
+                table.insert(fields, field)
             end
 
             -- '}'
