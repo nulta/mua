@@ -1,7 +1,6 @@
 -- This module re-translates the AST to Lua code.
 
-local Ast = require("compiler.ast")
-
+local Defs = require("compiler.definitions")
 
 ---@class Retrans
 local Retrans = {}
@@ -235,6 +234,7 @@ end
 ---@param node Node
 ---@return table
 function Retrans:parse(node)
+    ---@type { [integer]: string, type: NODETYPE }
     local code = {}
 
     local case = self.nodeSwitches[node.type]
@@ -256,13 +256,16 @@ function Retrans:parse(node)
         error("Invalid case type " .. caseType .. " for node " .. node)
     end
 
+    -- Add the type tag
+    code.type = node.type
+
     return code
 end
 
 
 --- After-process the nested tokens to eliminate lexical ambiguities.
 ---@param code table
-function Retrans:afterprocess(code)
+function Retrans:afterprocessNestedTokens(code)
     -- replace each chunk's starting "(" with ";("
     for _, node in ipairs(code) do
         while node[1] do
@@ -270,6 +273,111 @@ function Retrans:afterprocess(code)
                 node[1] = ";("
             end
             node = node[1]
+        end
+    end
+end
+
+
+--- After-process the nested tokens to prettify the code.
+--- TODO: Rewrite this function.
+---@param code table
+function Retrans:prettifyNestedTokens(code, indent)
+    indent = indent or 0
+    if type(code) ~= "table" then return end
+
+    ---@type { [NODETYPE]: true }
+    local lineBreakNodes = {
+        ["DoStatNode"] = true,
+        ["IfStatNode"] = true,
+        ["WhileStatNode"] = true,
+        ["IterativeForStatNode"] = true,
+        ["NumericForStatNode"] = true,
+        ["RepeatStatNode"] = true,
+        ["FunctionDeclarationStatNode"] = true,
+        ["LocalFunctionDeclarationStatNode"] = true,
+        ["VariableAssignmentStatNode"] = true,
+        ["LocalVariableAssignmentStatNode"] = true,
+        ["ReturnStatNode"] = true,
+        ["BreakStatNode"] = true,
+        ["FunctionCallStatNode"] = true,
+        ["GotoLabelStatNode"] = true,
+        ["GotoStatNode"] = true,
+        ["TableConstructorExpNode"] = true,
+        ["FunctionDefExpNode"] = true,
+    }
+
+    local lineBreakKeywords = {
+        ["do"] = true,
+        ["repeat"] = true,
+        ["then"] = true,
+        ["else"] = true,
+    }
+
+    local indented = false
+    local hasKeyword = false
+
+    for i, v in ipairs(code) do
+        if lineBreakKeywords[v] then
+            indented = true
+            hasKeyword = true
+            table.insert(code, i + 1, "\n" .. string.rep("    ", indent))
+        end
+
+        if v == "end" then
+            indented = true
+            hasKeyword = true
+            code[i] = "\n" .. string.rep("    ", indent - 1) .. "end\n" .. string.rep("    ", indent - 1)
+            -- table.insert(code, i + 2, "\n" .. string.rep("    ", indent))
+        end
+
+        if ((code.type == "FunctionDeclarationStatNode")
+        or (code.type == "LocalFunctionDeclarationStatNode")
+        or (code.type == "FunctionDefExpNode")) and v == ")" then
+            indented = true
+            hasKeyword = true
+            code[i] = "\n" .. string.rep("    ", indent) .. "end\n" .. string.rep("    ", indent)
+        end
+    end
+
+    if lineBreakNodes[code.type] and not hasKeyword then
+        indented = true
+        table.insert(code, 1, "\n" .. string.rep("    ", indent))
+    end
+
+
+    for _, node in ipairs(code) do
+        self:prettifyNestedTokens(node, indent + (indented and 1 or 0))
+    end
+end
+
+
+--- Minify the flattened tokens.
+---@param code table
+function Retrans:processPreNoSpaces(code)
+    for i, v in ipairs(code) do
+        local isSymbol = Defs.LuaSymbols[v]
+        local nextToken = code[i+1]
+
+        if nextToken then
+            local nonAmbiguousSymbols = {
+                ["("] = true,
+                ["["] = true,
+                ["{"] = true,
+                ["}"] = true,
+                [")"] = true,
+                ["]"] = true,
+                [";"] = true,
+                [","] = true,
+            }
+
+            local nextIsSymbol = Defs.LuaSymbols[nextToken]
+            local symbolNextSymbol = (isSymbol == nextIsSymbol)
+            local isNonAmbiguous = nonAmbiguousSymbols[v] or nonAmbiguousSymbols[nextToken]
+            local dotNextNumber = nextToken:match("^%.") and tonumber(v)
+
+            if (symbolNextSymbol and not isNonAmbiguous) or dotNextNumber then
+                code[i] = v .. " "
+            end
         end
     end
 end
@@ -287,8 +395,10 @@ end
 
 --- Re-translate the AST to Lua code.
 ---@param ast AbstractSyntaxTree
+---@param flags {["prettify"]: boolean?, ["noSpaces"]: boolean?} | nil
 ---@return string
-function Retrans:retranslate(ast)
+function Retrans:retranslate(ast, flags)
+    flags = flags or {}
     local code = {}
 
     -- Parse individual nodes
@@ -296,15 +406,23 @@ function Retrans:retranslate(ast)
         table.insert(code, self:parse(node))
     end
 
-    -- Afterprocess
-    self:afterprocess(code)
+    -- Afterprocessing
+    self:afterprocessNestedTokens(code)
+    if flags.prettify then
+        self:prettifyNestedTokens(code)
+    end
 
     -- Flatten the nested tables
     local flattened = {}
     flattenInto(flattened, code)
 
     -- Return the code as a string
-    return table.concat(flattened, " ")
+    if flags.noSpaces then
+        self:processPreNoSpaces(flattened)
+        return table.concat(flattened)
+    else
+        return table.concat(flattened, " ")
+    end
 end
 
 return Retrans

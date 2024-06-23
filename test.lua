@@ -258,7 +258,7 @@ do
     local function retranslate(code, filename)
         local tokens = Lexer.new(code, filename):lex()
         local ast = Parser.new(tokens, filename):parse()
-        local retrans = Retrans:retranslate(ast)
+        local retrans = Retrans:retranslate(ast, {})
         return retrans
     end
 
