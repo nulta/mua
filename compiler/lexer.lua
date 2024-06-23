@@ -265,7 +265,7 @@ function Lexer:lexText()
     until self:isEof()
 
     local value = self:getTokenValue()
-    if Defs.LuaKeywords[value] then
+    if Defs.Keywords[value] then
         self:switchToken(TokenType.KEYWORD)
     end
 

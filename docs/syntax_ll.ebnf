@@ -16,11 +16,8 @@ stat ::=  ';' |
 	 for namelist in explist do block end |
 	 function funcname funcbody |
 	 local function Name funcbody |
-	 local attnamelist ['=' explist]
-
-attnamelist ::=  Name attrib {',' Name attrib}
-
-attrib ::= ['<' Name '>']
+	 local namelist ['=' explist] |
+	 muaStat
 
 retstat ::= return [explist] [';']
 
@@ -29,7 +26,7 @@ label ::= '::' Name '::'
 funcname ::= Name {'.' Name} [':' Name]
 
 
-functiondef ::= function funcbody
+functiondef ::= function funcbody | muaFn
 
 funcbody ::= '(' [parlist] ')' block end
 
@@ -88,3 +85,11 @@ binop ::=  '+' | '-' | '*' | '/' | '//' | '^' | '%' |
 	 and | or
 
 unop ::= '-' | not | '#' | '~'
+
+
+(* -- Mua -- *)
+
+muaStat ::= continue
+
+muaFn ::= fn funcbody
+

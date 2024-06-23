@@ -40,6 +40,20 @@ Defs.LuaKeywords = {
     ["while"] = true,
 }
 
+Defs.MuaKeywords = {
+    ["continue"] = true,
+    ["fn"] = true,
+}
+
+Defs.Keywords = {}
+
+for k,_ in pairs(Defs.LuaKeywords) do
+    Defs.Keywords[k] = true
+end
+for k,_ in pairs(Defs.MuaKeywords) do
+    Defs.Keywords[k] = true
+end
+
 
 --- Lua symbols
 Defs.LuaSymbols = {
