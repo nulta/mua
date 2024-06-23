@@ -243,13 +243,15 @@ do
 
     local counts = 0
 
-    local function newTest(code)
+    local function newTest(code, filename)
         counts = counts + 1
         print("")
         print("")
         print("[ Test #" .. counts .. " ]")
         if not code:find("\n") then
             print("  " .. code)
+        elseif filename then
+            print(": " .. filename)
         end
     end
 
@@ -261,7 +263,7 @@ do
     end
 
     local function testRetrans(code, filename)
-        newTest(code)
+        newTest(code, filename)
 
         -- equality test on repeated retranslation
         local retransed = retranslate(code)
@@ -287,11 +289,23 @@ do
                 retransVal = retransVal:gsub("%[string \".+\"%]:%d+:", "[string]")
             end
 
+            if type(originalVal) == "table" then
+                originalVal = table.concat(originalVal, ",")
+                retransVal = table.concat(retransVal, ",")
+            end
+
             assert(originalVal == retransVal, "Original function and retranslated function should return equal value: " .. tostring(originalVal) .. " ~= " .. tostring(retransVal))
             print("\n[Return]\n  " .. tostring(retransVal))
         else
             assert(failOriginal == failRetrans, "load(retranslate) error should be equal with errOriginal: " .. tostring(failOriginal) .. " ~= " .. tostring(failRetrans))
         end
+    end
+
+    local function testFile(filename)
+        local code = io.open(filename)
+        assert(code)
+        testRetrans(code:read("*a"), filename)
+        code:close()
     end
 
 
@@ -372,4 +386,14 @@ return true
         end
         return table.concat(t, "//")
     ]=])
+
+    testRetrans("return (1+6)/3*6^4-(55*4+32+(2^7+5)*43)+2^2^(0+2)")
+
+    testRetrans("a = nothing ;(a or math.sin)(1) return math.sin(2);")
+
+    testRetrans("a = function(b, ...) end")
+
+    testFile("compiler/lexer.lua")
+
+    testFile("docs/testsuite_literals.lua")
 end

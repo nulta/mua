@@ -150,7 +150,9 @@ do
         local stat
         repeat
             stat = self:tryStat()
-            table.insert(block, stat)
+            if stat ~= ";" then
+                table.insert(block, stat)
+            end
         until not stat
 
         -- [retstat]
@@ -161,8 +163,8 @@ do
     end
 
 
-    --- `stat ::= (...)`
-    ---@return StatNode?
+    --- `stat ::= (...) | ';'`
+    ---@return StatNode | ";" | nil
     function Parser:tryStat()
         local position = self:peekPosition()
 
@@ -317,17 +319,23 @@ do
             end
         end
 
+        -- ';'
+        if self:match(";") then
+            return ";"
+        end
+
         return nil
     end
 
 
-    --- `retstat ::= return [explist]`
+    --- `retstat ::= return [explist] [';']`
     ---@return ReturnStatNode?
     function Parser:tryReturnStat()
         local position = self:peekPosition()
 
         if self:match("return") then
             local explist = self:parseExpList(true)
+            self:match(";")
             return Ast.ReturnStatNode:new({expressions = explist}, position)
         end
 
@@ -582,7 +590,8 @@ do
                     i = i + #num
                 elseif next == "u" then
                     -- \u{HHH...}
-                    local hex = value:match("^{%x+}", i+1)
+                    i = i + 1
+                    local hex = value:match("^{%x+}", i)
                     self:assert(hex, "hexadecimal digit expected")
 
                     local hexNum = tonumber(hex:sub(2, -2), 16)
@@ -592,6 +601,7 @@ do
                     i = i + #hex
                 elseif next == "z" then
                     -- \z (skip whitespace)
+                    i = i + 1
                     while value:sub(i, i):match("%s") do
                         i = i + 1
                     end
@@ -724,15 +734,17 @@ do
         -- prefixexp_1
         local prefixexp
         do
+            local position = self:peekPosition()
+
             if self:match("(") then
                 local expression = self:parseExp()
                 self:expect(")")
-                prefixexp = expression
+                prefixexp = Ast.ParenthesesExpNode:new({expression = expression}, position)
             end
 
             if self:match(TokenType.NAME) then
                 local name = self:current().value
-                prefixexp = Ast.NameExpNode:new({name = name}, self:peekPosition())
+                prefixexp = Ast.NameExpNode:new({name = name}, position)
             end
 
             if not prefixexp then

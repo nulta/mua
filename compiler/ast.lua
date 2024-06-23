@@ -38,6 +38,7 @@ local Ast = {}
 ---| "NameExpNode"
 ---| "TableIndexExpNode"
 ---| "FunctionDefExpNode"
+---| "ParenthesesExpNode"
 
 do
     ---@class Node
@@ -276,5 +277,9 @@ Ast.TableIndexExpNode= Ast.ExpNode:extend("TableIndexExpNode")
 ---@field block StatNode[]
 Ast.FunctionDefExpNode = Ast.ExpNode:extend("FunctionDefExpNode")
 
+---@class ParenthesesExpNode : ExpNode
+---@field type "ParenthesesExpNode"
+---@field expression ExpNode
+Ast.ParenthesesExpNode = Ast.ExpNode:extend("ParenthesesExpNode")
 
 return Ast

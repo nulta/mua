@@ -53,17 +53,36 @@ Retrans.nodeSwitches = {
     ["IterativeForStatNode"]
     = {"for", "{names,}", "in", "{expressions}", "do", "{block}", "end"},
 
-    ["NumericForStatNode"]
-    = {"for", "{name}", "=", "{start}", ",", "{end}", "{step}", "do", "{block}", "end"},
+    ["NumericForStatNode"] ---@param node NumericForStatNode
+    = function(node)
+        local code = {"for"}
+
+        table.insert(code, node.name)
+        table.insert(code, "=")
+        table.insert(code, Retrans:parse(node.startExpr))
+        table.insert(code, ",")
+        table.insert(code, Retrans:parse(node.endExpr))
+
+        if node.stepExpr then
+            table.insert(code, ",")
+            table.insert(code, Retrans:parse(node.stepExpr))
+        end
+
+        table.insert(code, "do")
+        table.insert(code, Retrans:parseMultiple(node.block))
+        table.insert(code, "end")
+
+        return code
+    end,
 
     ["RepeatStatNode"]
-    = {"repeat", "{block}", "until", "{condition}"},
+    = {"repeat", "{block}", "until", "{untilCondition}"},
 
     ["FunctionDeclarationStatNode"]
-    = {"function", "{name}", "(", "{parameters}", ")", "{block}", "end"},
+    = {"function", "{name}", "(", "{parameters,}", ")", "{block}", "end"},
 
     ["LocalFunctionDeclarationStatNode"]
-    = {"local", "function", "{name}", "(", "{parameters}", ")", "{block}", "end"},
+    = {"local", "function", "{name}", "(", "{parameters,}", ")", "{block}", "end"},
 
     ["VariableAssignmentStatNode"]
     = {"{names,}", "=", "{expressions,}"},
@@ -93,8 +112,18 @@ Retrans.nodeSwitches = {
 
     ["StringLiteralExpNode"]
     = function(node)
-        local escaped = node.value:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "\\n")
-        -- Return as a single token
+        local escaped = node.value
+            :gsub("\\", "\\\\")
+            :gsub('"', '\\"')
+            :gsub("\n", "\\n")
+            :gsub("\r", "\\r")
+            :gsub("\v", "\\v")
+            :gsub("\t", "\\t")
+            :gsub("\a", "\\a")
+            :gsub("\b", "\\b")
+            :gsub("\f", "\\f")
+
+            -- Return as a single token
         return {'"' .. escaped .. '"'}
     end,
 
@@ -141,6 +170,9 @@ Retrans.nodeSwitches = {
 
     ["FunctionDefExpNode"]
     = {"function", "(", "{parameters,}", ")", "{block}", "end"},
+
+    ["ParenthesesExpNode"]
+    = {"(", "{expression}", ")"},
 }
 
 
@@ -215,6 +247,21 @@ function Retrans:parse(node)
 end
 
 
+--- After-process the nested tokens to eliminate lexical ambiguities.
+---@param code table
+function Retrans:afterprocess(code)
+    -- replace each chunk's starting "(" with ";("
+    for _, node in ipairs(code) do
+        while node[1] do
+            if node[1] == "(" then
+                node[1] = ";("
+            end
+            node = node[1]
+        end
+    end
+end
+
+
 local function flattenInto(tbl, tbl2)
     for _, v in ipairs(tbl2) do
         if type(v) == "table" then
@@ -231,11 +278,20 @@ end
 function Retrans:retranslate(ast)
     local code = {}
 
+    -- Parse individual nodes
     for _, node in ipairs(ast) do
-        flattenInto(code, self:parse(node))
+        table.insert(code, self:parse(node))
     end
 
-    return table.concat(code, " ")
+    -- Afterprocess
+    self:afterprocess(code)
+
+    -- Flatten the nested tables
+    local flattened = {}
+    flattenInto(flattened, code)
+
+    -- Return the code as a string
+    return table.concat(flattened, " ")
 end
 
 return Retrans
