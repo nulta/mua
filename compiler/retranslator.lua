@@ -8,38 +8,38 @@ local Retrans = {}
 
 
 ---@param node FunctionCallExpNode | FunctionCallStatNode
-local function parseFunctionCallNode(node)
-    local code = {Retrans:parse(node.target)}
+function Retrans:parseFunctionCallNode(node)
+    local code = {self:parse(node.target)}
     if node.method then
         table.insert(code, ":")
         table.insert(code, node.method)
     end
     table.insert(code, "(")
-    table.insert(code, Retrans:parseMultiple(node.args, ","))
+    table.insert(code, self:parseMultiple(node.args, ","))
     table.insert(code, ")")
     return code
 end
 
 
----@type table<NODETYPE, string[] | fun(Node): string[]>
+---@type table<NODETYPE, string[] | fun(Retrans, Node): string[]>
 Retrans.nodeSwitches = {
     ["DoStatNode"]
     = {"do", "{block}", "end"},
 
     ["IfStatNode"] ---@param node IfStatNode
-    = function(node)
+    = function(self, node)
         local code = {}
 
         for k, ifNode in ipairs(node.ifNodes) do
             table.insert(code, (k == 1) and "if" or "elseif")
-            table.insert(code, Retrans:parse(ifNode.condition))
+            table.insert(code, self:parse(ifNode.condition))
             table.insert(code, "then")
-            table.insert(code, Retrans:parseMultiple(ifNode.block))
+            table.insert(code, self:parseMultiple(ifNode.block))
         end
 
         if node.elseBlock then
             table.insert(code, "else")
-            table.insert(code, Retrans:parseMultiple(node.elseBlock))
+            table.insert(code, self:parseMultiple(node.elseBlock))
         end
 
         table.insert(code, "end")
@@ -54,22 +54,22 @@ Retrans.nodeSwitches = {
     = {"for", "{names,}", "in", "{expressions}", "do", "{block}", "end"},
 
     ["NumericForStatNode"] ---@param node NumericForStatNode
-    = function(node)
+    = function(self, node)
         local code = {"for"}
 
         table.insert(code, node.name)
         table.insert(code, "=")
-        table.insert(code, Retrans:parse(node.startExpr))
+        table.insert(code, self:parse(node.startExpr))
         table.insert(code, ",")
-        table.insert(code, Retrans:parse(node.endExpr))
+        table.insert(code, self:parse(node.endExpr))
 
         if node.stepExpr then
             table.insert(code, ",")
-            table.insert(code, Retrans:parse(node.stepExpr))
+            table.insert(code, self:parse(node.stepExpr))
         end
 
         table.insert(code, "do")
-        table.insert(code, Retrans:parseMultiple(node.block))
+        table.insert(code, self:parseMultiple(node.block))
         table.insert(code, "end")
 
         return code
@@ -88,16 +88,16 @@ Retrans.nodeSwitches = {
     = {"{names,}", "=", "{expressions,}"},
 
     ["LocalVariableAssignmentStatNode"]
-    = function(node)
+    = function(self, node)
         -- "local"
         local code = {"local"}
 
-        table.insert(code, Retrans:parseMultiple(node.names, ","))
+        table.insert(code, self:parseMultiple(node.names, ","))
 
         -- "=" "{expressions,}"
         if next(node.expressions) then
             table.insert(code, "=")
-            table.insert(code, Retrans:parseMultiple(node.expressions, ","))
+            table.insert(code, self:parseMultiple(node.expressions, ","))
         end
 
         return code
@@ -110,7 +110,7 @@ Retrans.nodeSwitches = {
     = {"break"},
 
     ["FunctionCallStatNode"]
-    = parseFunctionCallNode,
+    = Retrans.parseFunctionCallNode,
 
     ["GotoLabelStatNode"]
     = {"::", "{name}", "::"},
@@ -119,12 +119,12 @@ Retrans.nodeSwitches = {
     = {"goto", "{name}"},
 
     ["NumberLiteralExpNode"]
-    = function (node)
+    = function(self, node)
         return {tostring(node.value)}
     end,
 
     ["StringLiteralExpNode"]
-    = function(node)
+    = function(self, node)
         local escaped = node.value
             :gsub("\\", "\\\\")
             :gsub('"', '\\"')
@@ -144,20 +144,20 @@ Retrans.nodeSwitches = {
     = {"nil"},
 
     ["BooleanLiteralExpNode"]
-    = function(node)
+    = function(self, node)
         return {node.value and "true" or "false"}
     end,
 
     ["TableConstructorExpNode"]
-    = function(node)
+    = function(self, node)
         local code = {"{"}
 
         for _, v in ipairs(node.fields) do
             table.insert(code, "[")
-            table.insert(code, Retrans:parse(v.key))
+            table.insert(code, self:parse(v.key))
             table.insert(code, "]")
             table.insert(code, "=")
-            table.insert(code, Retrans:parse(v.value))
+            table.insert(code, self:parse(v.value))
             table.insert(code, ",")
         end
 
@@ -167,7 +167,7 @@ Retrans.nodeSwitches = {
     end,
 
     ["FunctionCallExpNode"]
-    = parseFunctionCallNode,
+    = Retrans.parseFunctionCallNode,
 
     ["BinaryOpExpNode"]
     = {"{left}", "{operator}", "{right}"},
@@ -241,7 +241,7 @@ function Retrans:parse(node)
     local caseType = type(case)
 
     if caseType == "function" then
-        code = case(node)
+        code = case(self, node)
     elseif caseType == "table" then
         for _, v in ipairs(case) do
             if type(v) == "string" then
