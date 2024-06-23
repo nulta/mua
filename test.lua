@@ -268,13 +268,38 @@ do
         -- equality test on repeated retranslation
         local retransed = retranslate(code, filename)
         print("\n[Retrans]")
-        print("  " .. retransed)
+        if not VERBOSE and #retransed > 100 then
+            print("  " .. retransed:sub(1, 100) .. " ...")
+        else
+            print("  " .. retransed)
+        end
 
         assert(retranslate(retransed) == retransed, "retrans(retrans) should be equal with the retrans: " .. retranslate(retransed))
 
+        -- virtual environment
+        local fenv1 = {
+            print = function() end,
+            os = {clock = os.clock, time = os.time},
+            debug = {traceback = debug.traceback},
+        }
+        fenv1._G = fenv1
+        fenv1.dostring = function(x) return load(x, nil, nil, fenv1)() end
+        fenv1.load = function(x, y, z) return load(x, y, z, fenv1) end
+        setmetatable(fenv1, {__index = _G})
+
+        local fenv2 = {
+            print = function() end,
+            os = {clock = os.clock, time = os.time},
+            debug = {traceback = debug.traceback},
+        }
+        fenv2._G = fenv2
+        fenv2.dostring = function(x) return load(x, nil, nil, fenv2)() end
+        fenv2.load = function(x, y, z) return load(x, y, z, fenv2) end
+        setmetatable(fenv2, {__index = _G})
+
         -- return value equality test with the original code
-        local originalFunc, failOriginal = load(code)
-        local retransFunc, failRetrans = load(retranslate(code))
+        local originalFunc, failOriginal = load(code, nil, nil, fenv1)
+        local retransFunc, failRetrans = load(retranslate(code), nil, nil, fenv2)
 
         if originalFunc then
             assert(retransFunc, "load(retranslate) should not error: " .. (failRetrans or "?"))
@@ -402,3 +427,8 @@ return true
 
     testFile("docs/testsuite_literals.lua")
 end
+
+print("")
+print("")
+print("== All tests passed ==")
+print("")
