@@ -930,7 +930,7 @@ do
         end
 
         -- Name '=' exp
-        if self:match(TokenType.NAME) then
+        if self:peek(2).value == "=" and self:match(TokenType.NAME) then
             local key = Ast.StringLiteralExpNode:new({value = self:current().value}, position)
             self:expect("=")
             local value = self:parseExp()

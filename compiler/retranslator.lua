@@ -88,7 +88,20 @@ Retrans.nodeSwitches = {
     = {"{names,}", "=", "{expressions,}"},
 
     ["LocalVariableAssignmentStatNode"]
-    = {"local", "{names,}", "=", "{expressions,}"},
+    = function(node)
+        -- "local"
+        local code = {"local"}
+
+        table.insert(code, Retrans:parseMultiple(node.names, ","))
+
+        -- "=" "{expressions,}"
+        if next(node.expressions) then
+            table.insert(code, "=")
+            table.insert(code, Retrans:parseMultiple(node.expressions, ","))
+        end
+
+        return code
+    end,
 
     ["ReturnStatNode"]
     = {"return", "{expressions,}"},
@@ -100,10 +113,10 @@ Retrans.nodeSwitches = {
     = parseFunctionCallNode,
 
     ["GotoLabelStatNode"]
-    = {"::", "{label}", "::"},
+    = {"::", "{name}", "::"},
 
     ["GotoStatNode"]
-    = {"goto", "{label}"},
+    = {"goto", "{name}"},
 
     ["NumberLiteralExpNode"]
     = function (node)
@@ -210,7 +223,7 @@ function Retrans:parseMultiple(nodes, seperator)
             table.insert(code, self:parse(v))
         end
 
-        if nodes[k+1] then
+        if nodes[k+1] and seperator ~= "" then
             table.insert(code, seperator)
         end
     end

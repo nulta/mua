@@ -255,9 +255,9 @@ do
         end
     end
 
-    local function retranslate(code)
-        local tokens = Lexer.new(code):lex()
-        local ast = Parser.new(tokens):parse()
+    local function retranslate(code, filename)
+        local tokens = Lexer.new(code, filename):lex()
+        local ast = Parser.new(tokens, filename):parse()
         local retrans = Retrans:retranslate(ast)
         return retrans
     end
@@ -266,7 +266,7 @@ do
         newTest(code, filename)
 
         -- equality test on repeated retranslation
-        local retransed = retranslate(code)
+        local retransed = retranslate(code, filename)
         print("\n[Retrans]")
         print("  " .. retransed)
 
@@ -281,7 +281,8 @@ do
 
             local okO, originalVal = pcall(originalFunc)
             local okR, retransVal = pcall(retransFunc)
-            assert(okO == okR, "Original function and retranslated function should return equal status: " .. tostring(okO) .. " ~= " .. tostring(okR))
+            if okO ~= okR then retransFunc() end
+            assert(okO == okR, "Original function and retranslated function should return equal status: " .. tostring(originalVal) .. " ~= " .. tostring(retransVal))
 
             if not okO then
                 -- remove original string from error message
@@ -393,7 +394,11 @@ return true
 
     testRetrans("a = function(b, ...) end")
 
+    testFile("compiler/ast.lua")
+    testFile("compiler/definitions.lua")
     testFile("compiler/lexer.lua")
+    testFile("compiler/parser.lua")
+    testFile("compiler/retranslator.lua")
 
     testFile("docs/testsuite_literals.lua")
 end
