@@ -467,7 +467,7 @@ do
 
 
     --- simpleexp ::= nil | false | true | Numeral | LiteralString | '...'
-    ---     | functiondef | tableconstructor
+    ---     | functiondef | tableconstructor | muaSimpleExp
     function Parser:trySimpleExp()
         local position = self:peekPosition()
 
@@ -518,6 +518,12 @@ do
         local tableConstructor = self:tryTableConstructorExp()
         if tableConstructor then
             return tableConstructor
+        end
+
+        -- muaSimpleExp
+        local muaSimpleExp = self:tryMuaSimpleExp()
+        if muaSimpleExp then
+            return muaSimpleExp
         end
 
         return nil
@@ -676,7 +682,7 @@ do
             local token = self:peek()
             local operator = token.value
 
-            local lbp, rbp = self:operatorBindingPower(token.value)
+            local lbp, rbp = self:getBindingPower(token.value)
             if lbp <= minBindingPower then
                 break
             end
@@ -948,7 +954,7 @@ do
     --- Returns the left-binding power and right-binding power of a operator.
     ---@param symbol string
     ---@return integer, integer
-    function Parser:operatorBindingPower(symbol)
+    function Parser:getBindingPower(symbol)
         local bindingPower = {
             ["^"]  = {121, 120}, -- #1 (left associative)
             ["*"]  = {110}, -- #2
@@ -974,6 +980,29 @@ do
         local lbp = power[1]
         local rbp = power[2] or lbp + 1
         return lbp, rbp
+    end
+
+
+    --- `muaSimpleExp ::= muaFn`
+    ---@return ExpNode?
+    function Parser:tryMuaSimpleExp()
+        local muaFn = self:tryMuaFunc()
+        if muaFn then return muaFn end
+
+        return nil
+    end
+
+    --- `muaFn ::= 'fn' funcbody`
+    ---@return FunctionDefExpNode?
+    function Parser:tryMuaFunc()
+        local position = self:peekPosition()
+
+        if self:match("fn") then
+            local body = self:parseFuncBody()
+            return Ast.FunctionDefExpNode:new({parameters = body.parameters, block = body.block}, position)
+        end
+
+        return nil
     end
 end
 

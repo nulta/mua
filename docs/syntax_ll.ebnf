@@ -45,7 +45,7 @@ fieldsep ::= ',' | ';'
 
 
 simpleexp ::= nil | false | true | Numeral | LiteralString | '...'
-        | functiondef | tableconstructor
+        | functiondef | tableconstructor | muaSimpleExp
 
 varlist ::= var {',' var}
 
@@ -90,6 +90,8 @@ unop ::= '-' | not | '#' | '~'
 (* -- Mua -- *)
 
 muaStat ::= continue
+
+muaSimpleExp ::= muaFn
 
 muaFn ::= fn funcbody
 

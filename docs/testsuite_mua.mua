@@ -1,0 +1,6 @@
+
+-- `fn(x) end` -> `function(x) end`
+local a = fn(x) return x + x + (fn(y, z) return y*z end)(x,3) end
+
+assert(a(2) == 10)
+
